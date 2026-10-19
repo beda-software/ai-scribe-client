@@ -1,0 +1,4 @@
+{
+    "*.{js,ts}": ["vp lint --fix", "vp fmt"],
+    "*.{json,md,yml,yaml}": "vp fmt"
+}

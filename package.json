@@ -1,0 +1,78 @@
+{
+    "name": "@beda.software/ai-scribe-client",
+    "version": "0.0.1-alpha.0",
+    "description": "Client side of the AI scribe: realtime transcription, diarization with speaker samples and transcript messages",
+    "license": "MIT",
+    "type": "module",
+    "sideEffects": false,
+    "main": "./dist/index.js",
+    "react-native": "./src/index.ts",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "react-native": {
+                "types": "./src/index.ts",
+                "default": "./src/index.ts"
+            },
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js",
+            "default": "./dist/index.js"
+        },
+        "./transcription": {
+            "react-native": {
+                "types": "./src/transcription/index.ts",
+                "default": "./src/transcription/index.ts"
+            },
+            "types": "./dist/transcription/index.d.ts",
+            "import": "./dist/transcription/index.js",
+            "default": "./dist/transcription/index.js"
+        },
+        "./package.json": "./package.json"
+    },
+    "files": [
+        "dist",
+        "src",
+        "!src/**/*.test.ts",
+        "README.md"
+    ],
+    "peerDependencies": {
+        "@beda.software/remote-data": "^1.1.4",
+        "axios": ">=1"
+    },
+    "peerDependenciesMeta": {
+        "axios": {
+            "optional": true
+        }
+    },
+    "publishConfig": {
+        "access": "public"
+    },
+    "scripts": {
+        "test": "vp test run",
+        "test:watch": "vp test",
+        "lint": "vp lint",
+        "fmt": "vp fmt",
+        "check": "vp check",
+        "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
+        "build": "node -e \"require('fs').rmSync('dist',{ recursive: true, force: true })\" && tsc -p tsconfig.json",
+        "prepare": "husky && yarn build",
+        "prepublishOnly": "yarn typecheck && yarn test"
+    },
+    "devDependencies": {
+        "@beda.software/remote-data": "^1.1.4",
+        "axios": "^1.8.4",
+        "husky": "^9.1.7",
+        "lint-staged": "^15.5.0",
+        "typescript": "^5.1.6",
+        "vite-plus": "catalog:"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/beda-software/ai-scribe-client.git"
+    },
+    "packageManager": "yarn@4.18.1",
+    "resolutions": {
+        "vite": "npm:@voidzero-dev/vite-plus-core@1.2.0",
+        "vitest": "5.0.4"
+    }
+}

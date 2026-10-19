@@ -1,0 +1,25 @@
+{
+    "compilerOptions": {
+        "target": "es2020",
+        "lib": ["DOM", "DOM.Iterable", "ES2020"],
+        "module": "nodenext",
+        "moduleResolution": "nodenext",
+        "isolatedModules": true,
+        "strict": true,
+
+        "declaration": true,
+        "declarationMap": true,
+        "sourceMap": false,
+        "noEmitOnError": true,
+
+        "skipLibCheck": true,
+
+        "rootDir": "src",
+        "outDir": "dist",
+        "noUncheckedIndexedAccess": true,
+        "noUnusedLocals": true,
+        "esModuleInterop": true
+    },
+    "include": ["src/**/*"],
+    "exclude": ["dist", "node_modules", "**/*.test.ts"]
+}
