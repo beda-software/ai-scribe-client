@@ -4,9 +4,9 @@ import { cutSeconds } from './audio.js';
 import type { DiarizationResult } from './diarization.js';
 import type { TranscribeSegment } from './types.js';
 
-// `live` is a phrase still being spoken, `transcribing` one that is waiting for its transcript.
+// `listening` is a phrase still being spoken, `transcribing` one that is waiting for its transcript.
 export type TranscriptMessage =
-    | { id: string; text: string; spokenAt: number; status: 'live' | 'transcribing' | 'processing' | 'raw' }
+    | { id: string; text: string; spokenAt: number; status: 'listening' | 'transcribing' | 'processing' | 'raw' }
     | { id: string; text: string; spokenAt: number; status: 'diarized'; speakerId: string };
 
 export interface DiarizedSegment {
@@ -22,8 +22,8 @@ export type DiarizationOutcome =
 // A diarized segment ends before its last word fades out.
 const SEGMENT_TAIL_SECONDS = 0.8;
 
-export function createLiveMessage(itemId: string, spokenAt: number): TranscriptMessage {
-    return { id: itemId, text: '', spokenAt, status: 'live' };
+export function createListeningMessage(itemId: string, spokenAt: number): TranscriptMessage {
+    return { id: itemId, text: '', spokenAt, status: 'listening' };
 }
 
 export function createMessage(
@@ -37,7 +37,7 @@ export function createMessage(
 
 export function markMessageTranscribing(messages: readonly TranscriptMessage[], id: string): TranscriptMessage[] {
     return messages.map((message) =>
-        message.id === id && message.status === 'live' ? { ...message, status: 'transcribing' } : message,
+        message.id === id && message.status === 'listening' ? { ...message, status: 'transcribing' } : message,
     );
 }
 
@@ -46,13 +46,13 @@ export function removeMessage(messages: readonly TranscriptMessage[], id: string
 }
 
 // For a cleared audio buffer or a new session: their phrases never get a transcript.
-export function dropLiveMessages(messages: readonly TranscriptMessage[]): TranscriptMessage[] {
-    return messages.filter((message) => message.status !== 'live' && message.status !== 'transcribing');
+export function dropUntranscribedMessages(messages: readonly TranscriptMessage[]): TranscriptMessage[] {
+    return messages.filter((message) => message.status !== 'listening' && message.status !== 'transcribing');
 }
 
 /**
  * Inserts by spoken time, in place of a message with the same id: a long phrase's transcript can arrive after a
- * shorter one spoken later, and a phrase's live message becomes its transcript.
+ * shorter one spoken later, and a phrase's listening message becomes its transcript.
  */
 export function insertMessage(messages: readonly TranscriptMessage[], message: TranscriptMessage): TranscriptMessage[] {
     const others = removeMessage(messages, message.id);

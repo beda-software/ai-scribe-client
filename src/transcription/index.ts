@@ -8,9 +8,9 @@ export { attachWavBlob, diarizeClip, WAV_FILE_NAME, WAV_MIME_TYPE } from './serv
 export type { AttachWav } from './services.js';
 export {
     applyDiarization,
-    createLiveMessage,
+    createListeningMessage,
     createMessage,
-    dropLiveMessages,
+    dropUntranscribedMessages,
     getDiarizationOutcome,
     insertMessage,
     markMessageTranscribing,

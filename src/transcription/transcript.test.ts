@@ -5,10 +5,10 @@ import { convertMsToSamples } from './audio.js';
 import type { DiarizationResult } from './diarization.js';
 import {
     applyDiarization,
-    createLiveMessage,
+    createListeningMessage,
     createMessage,
     DiarizationOutcome,
-    dropLiveMessages,
+    dropUntranscribedMessages,
     getDiarizationOutcome,
     splitPhraseAudio,
     insertMessage,
@@ -51,19 +51,24 @@ describe('createMessage', () => {
     });
 });
 
-describe('live messages', () => {
-    const messages = [buildMessage('first', 1), createLiveMessage('live', 2), buildMessage('third', 3)];
+describe('untranscribed messages', () => {
+    const messages = [buildMessage('first', 1), createListeningMessage('listening', 2), buildMessage('third', 3)];
 
-    it('starts a live message with no text, and drops only live messages or the message asked for', () => {
-        expect(createLiveMessage('item_1', 7)).toEqual({ id: 'item_1', text: '', spokenAt: 7, status: 'live' });
-        expect(dropLiveMessages(messages).map((message) => message.id)).toEqual(['first', 'third']);
-        expect(removeMessage(messages, 'first').map((message) => message.id)).toEqual(['live', 'third']);
+    it('starts a listening message with no text, and drops only untranscribed messages or the message asked for', () => {
+        expect(createListeningMessage('item_1', 7)).toEqual({
+            id: 'item_1',
+            text: '',
+            spokenAt: 7,
+            status: 'listening',
+        });
+        expect(dropUntranscribedMessages(messages).map((message) => message.id)).toEqual(['first', 'third']);
+        expect(removeMessage(messages, 'first').map((message) => message.id)).toEqual(['listening', 'third']);
     });
 
-    it('marks only a live message as transcribing, and drops it like a live one', () => {
-        const marked = markMessageTranscribing(markMessageTranscribing(messages, 'live'), 'first');
+    it('marks only a listening message as transcribing, and drops it like a listening one', () => {
+        const marked = markMessageTranscribing(markMessageTranscribing(messages, 'listening'), 'first');
         expect(marked.map((message) => message.status)).toEqual(['processing', 'transcribing', 'processing']);
-        expect(dropLiveMessages(marked).map((message) => message.id)).toEqual(['first', 'third']);
+        expect(dropUntranscribedMessages(marked).map((message) => message.id)).toEqual(['first', 'third']);
     });
 });
 
@@ -80,8 +85,12 @@ describe('insertMessage', () => {
     });
 
     it('takes the place of a message with the same id, placed by its own spoken time', () => {
-        const withLive = [buildMessage('first', 1000), createLiveMessage('item', 60_000), buildMessage('late', 50_000)];
-        const inserted = insertMessage(withLive, { ...buildMessage('item', 20_000), status: 'raw' });
+        const withListening = [
+            buildMessage('first', 1000),
+            createListeningMessage('item', 60_000),
+            buildMessage('late', 50_000),
+        ];
+        const inserted = insertMessage(withListening, { ...buildMessage('item', 20_000), status: 'raw' });
         expect(inserted.map((message) => [message.id, message.status])).toEqual([
             ['first', 'processing'],
             ['item', 'raw'],
