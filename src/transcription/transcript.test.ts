@@ -12,6 +12,7 @@ import {
     getDiarizationOutcome,
     splitPhraseAudio,
     insertMessage,
+    markMessageTranscribing,
     removeMessage,
     TranscriptMessage,
 } from './transcript.js';
@@ -57,6 +58,12 @@ describe('live messages', () => {
         expect(createLiveMessage('item_1', 7)).toEqual({ id: 'item_1', text: '', spokenAt: 7, status: 'live' });
         expect(dropLiveMessages(messages).map((message) => message.id)).toEqual(['first', 'third']);
         expect(removeMessage(messages, 'first').map((message) => message.id)).toEqual(['live', 'third']);
+    });
+
+    it('marks only a live message as transcribing, and drops it like a live one', () => {
+        const marked = markMessageTranscribing(markMessageTranscribing(messages, 'live'), 'first');
+        expect(marked.map((message) => message.status)).toEqual(['processing', 'transcribing', 'processing']);
+        expect(dropLiveMessages(marked).map((message) => message.id)).toEqual(['first', 'third']);
     });
 });
 

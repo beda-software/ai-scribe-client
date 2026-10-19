@@ -4,9 +4,9 @@ import { cutSeconds } from './audio.js';
 import type { DiarizationResult } from './diarization.js';
 import type { TranscribeSegment } from './types.js';
 
-// `live` is a phrase still being spoken or transcribed.
+// `live` is a phrase still being spoken, `transcribing` one that is waiting for its transcript.
 export type TranscriptMessage =
-    | { id: string; text: string; spokenAt: number; status: 'live' | 'processing' | 'raw' }
+    | { id: string; text: string; spokenAt: number; status: 'live' | 'transcribing' | 'processing' | 'raw' }
     | { id: string; text: string; spokenAt: number; status: 'diarized'; speakerId: string };
 
 export interface DiarizedSegment {
@@ -35,13 +35,19 @@ export function createMessage(
     return { id: itemId, text, spokenAt: spokenAt ?? Date.now(), status };
 }
 
+export function markMessageTranscribing(messages: readonly TranscriptMessage[], id: string): TranscriptMessage[] {
+    return messages.map((message) =>
+        message.id === id && message.status === 'live' ? { ...message, status: 'transcribing' } : message,
+    );
+}
+
 export function removeMessage(messages: readonly TranscriptMessage[], id: string): TranscriptMessage[] {
     return messages.filter((message) => message.id !== id);
 }
 
 // For a cleared audio buffer or a new session: their phrases never get a transcript.
 export function dropLiveMessages(messages: readonly TranscriptMessage[]): TranscriptMessage[] {
-    return messages.filter((message) => message.status !== 'live');
+    return messages.filter((message) => message.status !== 'live' && message.status !== 'transcribing');
 }
 
 /**

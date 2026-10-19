@@ -13,6 +13,7 @@ export {
     dropLiveMessages,
     getDiarizationOutcome,
     insertMessage,
+    markMessageTranscribing,
     removeMessage,
     splitPhraseAudio,
 } from './transcript.js';
