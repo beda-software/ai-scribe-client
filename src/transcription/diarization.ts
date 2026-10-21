@@ -25,6 +25,11 @@ export interface DiarizationResult {
     speakerIds: ReadonlyMap<string, string>;
 }
 
+export interface DiarizerOptions {
+    /** Kept for the whole visit: a longer phrase by the same voice never replaces them. */
+    knownSamples?: SpeakerSample[];
+}
+
 export interface Diarizer {
     // Never rejects: a failed fetch, or a call still waiting when the diarizer is dropped, resolves to a failure.
     diarize: (clip: Int16Array) => Promise<RemoteDataResult<DiarizationResult>>;
@@ -32,8 +37,9 @@ export interface Diarizer {
 }
 
 /** Runs calls one at a time until every sample slot is taken, then in parallel: parallel calls could give one new voice two ids. */
-export function createDiarizer(fetchDiarization: FetchDiarization): Diarizer {
-    let samples: SpeakerSample[] = [];
+export function createDiarizer(fetchDiarization: FetchDiarization, options: DiarizerOptions = {}): Diarizer {
+    const knownSamples = options.knownSamples ?? [];
+    let samples: SpeakerSample[] = knownSamples;
     let queue: Promise<unknown> = Promise.resolve();
     let dropped = false;
 
@@ -52,7 +58,9 @@ export function createDiarizer(fetchDiarization: FetchDiarization): Diarizer {
         }
 
         const speakerIds = assignSpeakerIds(response.data.segments, sentSamples);
-        samples = updateSpeakerSamples(samples, clip, response.data.segments, speakerIds);
+        samples = updateSpeakerSamples(samples, clip, response.data.segments, speakerIds).map(
+            (sample) => knownSamples.find((known) => known.speakerId === sample.speakerId) ?? sample,
+        );
         return success({ transcript: response.data, speakerIds });
     };
 

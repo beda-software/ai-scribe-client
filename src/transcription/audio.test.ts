@@ -11,6 +11,7 @@ import {
     getEndMs,
     getLevel,
     getSpokenAt,
+    parseWav,
     resampleTo24k,
 } from './audio.js';
 
@@ -141,12 +142,12 @@ describe('buildWav', () => {
     it('writes a mono 24 kHz PCM16 RIFF header followed by the samples', () => {
         const wav = buildWav(Int16Array.from([1, -2, 0x7fff]));
         const view = new DataView(wav.buffer);
-        const readAscii = (offset: number): string => String.fromCharCode(...wav.subarray(offset, offset + 4));
+        const getAscii = (offset: number): string => String.fromCharCode(...wav.subarray(offset, offset + 4));
         expect(wav).toHaveLength(50);
-        expect(readAscii(0)).toBe('RIFF');
+        expect(getAscii(0)).toBe('RIFF');
         expect(view.getUint32(4, true)).toBe(42);
-        expect(readAscii(8)).toBe('WAVE');
-        expect(readAscii(12)).toBe('fmt ');
+        expect(getAscii(8)).toBe('WAVE');
+        expect(getAscii(12)).toBe('fmt ');
         expect(view.getUint32(16, true)).toBe(16);
         expect(view.getUint16(20, true)).toBe(1);
         expect(view.getUint16(22, true)).toBe(1);
@@ -154,8 +155,23 @@ describe('buildWav', () => {
         expect(view.getUint32(28, true)).toBe(48000);
         expect(view.getUint16(32, true)).toBe(2);
         expect(view.getUint16(34, true)).toBe(16);
-        expect(readAscii(36)).toBe('data');
+        expect(getAscii(36)).toBe('data');
         expect(view.getUint32(40, true)).toBe(6);
         expect([view.getInt16(44, true), view.getInt16(46, true), view.getInt16(48, true)]).toEqual([1, -2, 0x7fff]);
+    });
+});
+
+describe('parseWav', () => {
+    it('reads back the samples buildWav wrote', () => {
+        const samples = Int16Array.from([1, -2, 0x7fff, -0x8000]);
+        expect(parseWav(buildWav(samples))).toEqual(samples);
+    });
+
+    it('rejects a WAV in another format or a truncated one', () => {
+        const stereo = buildWav(Int16Array.from([1, 2]));
+        new DataView(stereo.buffer).setUint16(22, 2, true);
+        expect(() => parseWav(stereo)).toThrow();
+        expect(() => parseWav(buildWav(Int16Array.from([1, 2])).subarray(0, 46))).toThrow();
+        expect(() => parseWav(new Uint8Array(10))).toThrow();
     });
 });

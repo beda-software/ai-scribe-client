@@ -56,6 +56,49 @@ describe('createDiarizer', () => {
         expect(callCount).toBe(3);
     });
 
+    it('sends a known sample from the first call, in parallel, and keeps it over a longer phrase', async () => {
+        const sentSpeakers: KnownSpeaker[][] = [];
+        const fetchDiarization: FetchDiarization = (_clip, knownSpeakers) => {
+            sentSpeakers.push(knownSpeakers);
+            return Promise.resolve(success(buildTranscriptBy(getSampleName('A'), 5)));
+        };
+        const knownSample = buildClip(1);
+        const diarizer = createDiarizer(fetchDiarization, { knownSamples: [{ speakerId: 'A', samples: knownSample }] });
+
+        const results = await Promise.all([diarizer.diarize(buildClip(5)), diarizer.diarize(buildClip(5))]);
+        expect(
+            results.map((result) => (isSuccess(result) ? Object.fromEntries(result.data.speakerIds) : null)),
+        ).toEqual([{ [getSampleName('A')]: 'A' }, { [getSampleName('A')]: 'A' }]);
+
+        await diarizer.diarize(buildClip(5));
+        expect(sentSpeakers).toEqual(Array(3).fill([{ name: getSampleName('A'), samples: knownSample }]));
+    });
+
+    it('gives every voice besides a known sample the next id', async () => {
+        const fetchDiarization: FetchDiarization = () =>
+            Promise.resolve(
+                success({
+                    text: 'Words.',
+                    segments: [
+                        { speaker: getSampleName('A'), start: 0, end: 1, text: 'Words.' },
+                        { speaker: 'A', start: 1, end: 2, text: 'Words.' },
+                        { speaker: 'B', start: 2, end: 3, text: 'Words.' },
+                    ],
+                    llmStats: null,
+                }),
+            );
+        const diarizer = createDiarizer(fetchDiarization, {
+            knownSamples: [{ speakerId: 'A', samples: buildClip(5) }],
+        });
+
+        const result = await diarizer.diarize(buildClip(3));
+        expect(isSuccess(result) ? Object.fromEntries(result.data.speakerIds) : null).toEqual({
+            [getSampleName('A')]: 'A',
+            A: 'B',
+            B: 'B',
+        });
+    });
+
     it('resolves a fetch that throws as a failure', async () => {
         const result = await createDiarizer(() => Promise.reject(new Error('offline'))).diarize(buildClip(1));
         expect(result.status).toBe('Failure');

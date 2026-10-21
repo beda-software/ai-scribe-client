@@ -146,10 +146,35 @@ export function buildWav(samples: Int16Array): Uint8Array {
     return wav;
 }
 
+/** Reads back the samples of a WAV in the format `buildWav` writes; throws on any other file. */
+export function parseWav(bytes: Uint8Array): Int16Array {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const dataBytes = bytes.length >= WAV_HEADER_BYTES ? view.getUint32(40, true) : 0;
+    const isBuiltWav =
+        bytes.length >= WAV_HEADER_BYTES + dataBytes &&
+        getAscii(view, 0) === 'RIFF' &&
+        getAscii(view, 8) === 'WAVE' &&
+        getAscii(view, 12) === 'fmt ' &&
+        view.getUint16(20, true) === WAV_FORMAT_PCM &&
+        view.getUint16(22, true) === 1 &&
+        view.getUint32(24, true) === OUTPUT_SAMPLE_RATE &&
+        view.getUint16(34, true) === BYTES_PER_SAMPLE * 8 &&
+        getAscii(view, 36) === 'data';
+    if (!isBuiltWav) {
+        throw new Error('Not a 24 kHz mono PCM16 WAV');
+    }
+
+    return new Int16Array(bytes.slice(WAV_HEADER_BYTES, WAV_HEADER_BYTES + dataBytes).buffer);
+}
+
 function writeAscii(view: DataView, offset: number, text: string): void {
     for (let i = 0; i < text.length; i++) {
         view.setUint8(offset + i, text.charCodeAt(i));
     }
+}
+
+function getAscii(view: DataView, offset: number): string {
+    return String.fromCharCode(...Array.from({ length: 4 }, (_, i) => view.getUint8(offset + i)));
 }
 
 // Int16Array is little-endian on every target, which is what PCM16 expects.
