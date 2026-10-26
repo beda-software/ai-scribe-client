@@ -125,7 +125,7 @@ function buildSessionUpdate(model: string, language: string, silenceMs: number):
             audio: {
                 input: {
                     format: { type: 'audio/pcm', rate: OUTPUT_SAMPLE_RATE },
-                    transcription: { model: 'whisper-1', language },
+                    transcription: { model: 'gpt-transcribe', language },
                     turn_detection: {
                         type: 'server_vad',
                         silence_duration_ms: silenceMs,
