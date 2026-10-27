@@ -14,11 +14,13 @@ export {
     dropUntranscribedMessages,
     getDiarizationOutcome,
     insertMessage,
+    isPhrasePart,
     markMessageTranscribing,
     removeMessage,
+    removePhrase,
     splitPhraseAudio,
 } from './transcript.js';
 export type { DiarizationOutcome, DiarizedSegment, TranscriptMessage } from './transcript.js';
-export type { DiarizedTranscript, LlmStats, LlmUsage, Service, TranscribeSegment } from './types.js';
+export type { DiarizedTranscript, TranscribeSegment } from './types.js';
 export { checkVoiceSample, MAX_TAKE_SECONDS, MIN_TAKE_SECONDS } from './voice-sample.js';
 export type { VoiceSampleCheck } from './voice-sample.js';

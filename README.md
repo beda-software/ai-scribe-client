@@ -19,8 +19,8 @@ Peer dependencies: `@beda.software/remote-data`, and optionally `axios` for the 
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `connectRealtime`      | Opens an OpenAI Realtime transcription session over WebSocket with an ephemeral token, streams microphone chunks, emits every server event, and keeps each phrase's clip (`takeClip`) even when transcripts arrive out of order. |
 | `createDiarizer`       | Diarizes phrases against one visit's speaker samples: one call at a time until every sample slot is taken, then in parallel. `knownSamples` seeds slots with samples recorded beforehand, kept for the whole visit.              |
-| `diarizeClip`          | Sends a clip and the known speakers' samples to the AI scribe service's `/v2/transcribe` with diarization.                                                                                                                       |
-| Transcript messages    | `insertMessage`, `getDiarizationOutcome`, `applyDiarization`, `splitPhraseAudio` and friends: functions that take a message list and return a new one, for any store.                                                            |
+| `diarizeClip`          | Sends a clip and the known speakers' samples to the AI scribe service's `/v3/transcribe` with diarization; `llmStats` lists every model call.                                                                                    |
+| Transcript messages    | `insertMessage`, `getDiarizationOutcome`, `applyDiarization`, `removePhrase`, `splitPhraseAudio` and friends: functions that take a message list and return a new one, for any store.                                            |
 | `buildWav`, `getLevel` | A WAV file from 24 kHz PCM16 samples, and a chunk's level.                                                                                                                                                                       |
 | `parseWav`             | The samples of a WAV in the format `buildWav` writes; throws on any other file.                                                                                                                                                  |
 | `cutSeconds`           | A view of a time range of 24 kHz samples.                                                                                                                                                                                        |
@@ -37,6 +37,19 @@ attached to a form on React Native (`AttachWav`) and where messages are stored.
 - **phrase**: one realtime item, the speech server voice detection cuts between pauses, keyed by `item_id`;
 - **segment**: one speaker's part of a phrase, as the diarizer returns it;
 - **message**: one transcript entry. A phrase is one message until it is diarized, then one message per segment.
+
+## Commands
+
+`@beda.software/ai-scribe-client/commands` (also re-exported from the package root).
+
+| Area            | What it does                                                                                                                                                             |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `detectCommand` | Sends a text and the commands on offer to the AI scribe service's `/v3/detect-command`; returns the chosen command's payload merged with the said parameters, or `null`. |
+
+A command's `payload` is echoed back and never sent to the model, so it carries the `action` to run, which every payload
+needs; a parameter may not reuse a payload key. The app decides which commands to offer and runs the one returned.
+`DetectedCommandOf` types the result per action from the commands' own `parameters`, as long as the list is kept
+`as const` or written inline: typing it `Command<...>[]` widens the parameters away.
 
 ## Releasing
 

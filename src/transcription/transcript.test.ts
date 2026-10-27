@@ -12,8 +12,10 @@ import {
     getDiarizationOutcome,
     splitPhraseAudio,
     insertMessage,
+    isPhrasePart,
     markMessageTranscribing,
     removeMessage,
+    removePhrase,
     TranscriptMessage,
 } from './transcript.js';
 import type { DiarizedTranscript, TranscribeSegment } from './types.js';
@@ -26,7 +28,7 @@ const speakerIds = new Map([
 const buildTranscript = (segments: TranscribeSegment[]): DiarizedTranscript => ({
     text: segments.map((segment) => segment.text).join(' '),
     segments,
-    llmStats: null,
+    llmStats: [],
 });
 
 const buildResult = (
@@ -63,6 +65,21 @@ describe('untranscribed messages', () => {
         });
         expect(dropUntranscribedMessages(messages).map((message) => message.id)).toEqual(['first', 'third']);
         expect(removeMessage(messages, 'first').map((message) => message.id)).toEqual(['listening', 'third']);
+    });
+
+    it('removes a phrase with every speaker segment it was split into, and nothing that only shares a prefix', () => {
+        const split = [buildMessage('item_1-0', 1), buildMessage('item_1-1', 2), buildMessage('item_10', 3)];
+        expect(removePhrase(split, 'item_1').map((message) => message.id)).toEqual(['item_10']);
+        expect(removePhrase([buildMessage('item_1', 1)], 'item_1')).toEqual([]);
+    });
+
+    it('counts the phrase and its segments as its parts, not an id that only shares a prefix', () => {
+        expect(['item_1', 'item_1-0', 'item_10', 'item_10-0'].map((id) => isPhrasePart(id, 'item_1'))).toEqual([
+            true,
+            true,
+            false,
+            false,
+        ]);
     });
 
     it('marks only a listening message as transcribing, and drops it like a listening one', () => {

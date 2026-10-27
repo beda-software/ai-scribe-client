@@ -1,8 +1,9 @@
-import { failure, mapSuccess, RemoteDataResult } from '@beda.software/remote-data';
+import { failure, RemoteDataResult } from '@beda.software/remote-data';
 
-import { buildWav, OUTPUT_SAMPLE_RATE } from './audio.js';
+import { buildWav } from './audio.js';
 import type { KnownSpeaker } from './diarization.js';
-import type { DiarizedTranscript, Service } from './types.js';
+import type { Service } from '../types.js';
+import type { DiarizedTranscript } from './types.js';
 
 const TRANSCRIBE_TIMEOUT_MS = 60000;
 export const WAV_FILE_NAME = 'clip.wav';
@@ -21,15 +22,14 @@ export async function diarizeClip(
     try {
         const built = buildDiarizeForm(clip, knownSpeakers, attachWav);
         release = built.release;
-        const response = await service<DiarizedTranscript>({
+        return await service<DiarizedTranscript>({
             method: 'POST',
-            url: '/v2/transcribe',
+            url: '/v3/transcribe',
             data: built.form,
             // A JSON default content type would make React Native serialize the form; browsers add the boundary themselves.
             headers: { 'Content-Type': 'multipart/form-data' },
             timeout: TRANSCRIBE_TIMEOUT_MS,
         });
-        return mapSuccess(response, (transcript) => fillAudioSeconds(transcript, clip));
     } catch (error) {
         return failure(error);
     } finally {
@@ -65,19 +65,6 @@ export function buildDiarizeForm(
 
     form.append('diarize', 'true');
     return { form, release };
-}
-
-// Until the service reports it, the clip length stands in: speaker samples add tokens, not audio seconds.
-function fillAudioSeconds(transcript: DiarizedTranscript, clip: Int16Array): DiarizedTranscript {
-    const { llmStats } = transcript;
-    if (!llmStats || typeof llmStats.usage?.audioSeconds === 'number') {
-        return transcript;
-    }
-
-    return {
-        ...transcript,
-        llmStats: { ...llmStats, usage: { ...llmStats.usage, audioSeconds: clip.length / OUTPUT_SAMPLE_RATE } },
-    };
 }
 
 export const attachWavBlob: AttachWav = (form, field, wav) => {

@@ -11,7 +11,7 @@ const buildClip = (seconds: number): Int16Array => new Int16Array(convertMsToSam
 const buildTranscriptBy = (speaker: string, seconds: number): DiarizedTranscript => ({
     text: 'Words.',
     segments: [{ speaker, start: 0, end: seconds, text: 'Words.' }],
-    llmStats: null,
+    llmStats: [],
 });
 
 const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
@@ -84,7 +84,7 @@ describe('createDiarizer', () => {
                         { speaker: 'A', start: 1, end: 2, text: 'Words.' },
                         { speaker: 'B', start: 2, end: 3, text: 'Words.' },
                     ],
-                    llmStats: null,
+                    llmStats: [],
                 }),
             );
         const diarizer = createDiarizer(fetchDiarization, {

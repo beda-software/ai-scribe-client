@@ -20,7 +20,7 @@ const buildSegment = (start: number, end: number): TranscribeSegment => ({ speak
 const buildTranscript = (text: string, segments = [buildSegment(0, 8)]): DiarizedTranscript => ({
     text,
     segments,
-    llmStats: null,
+    llmStats: [],
 });
 
 describe('checkVoiceSample', () => {

@@ -45,6 +45,16 @@ export function removeMessage(messages: readonly TranscriptMessage[], id: string
     return messages.filter((message) => message.id !== id);
 }
 
+/** Removes a phrase's message and, once diarized, every speaker segment it was split into. */
+export function removePhrase(messages: readonly TranscriptMessage[], id: string): TranscriptMessage[] {
+    return messages.filter((message) => !isPhrasePart(message.id, id));
+}
+
+/** Whether a message is the phrase itself or one of the speaker segments it was split into. */
+export function isPhrasePart(messageId: string, phraseId: string): boolean {
+    return messageId === phraseId || messageId.startsWith(`${phraseId}-`);
+}
+
 // For a cleared audio buffer or a new session: their phrases never get a transcript.
 export function dropUntranscribedMessages(messages: readonly TranscriptMessage[]): TranscriptMessage[] {
     return messages.filter((message) => message.status !== 'listening' && message.status !== 'transcribing');
