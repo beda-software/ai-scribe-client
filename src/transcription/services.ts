@@ -44,8 +44,8 @@ export function buildDiarizeForm(
 ): { form: FormData; release: () => void } {
     const form = new FormData();
     const releases: Array<() => void> = [];
-    const attach = (field: string, samples: Int16Array): void => {
-        const release = attachWav(form, field, buildWav(samples));
+    const attach = (field: string, audioSamples: Int16Array): void => {
+        const release = attachWav(form, field, buildWav(audioSamples));
         if (release) {
             releases.push(release);
         }
@@ -54,9 +54,9 @@ export function buildDiarizeForm(
     const release = (): void => releases.forEach((releaseWav) => releaseWav());
     try {
         attach('file', clip);
-        knownSpeakers.forEach(({ name, samples }) => {
+        knownSpeakers.forEach(({ name, audioSamples }) => {
             form.append('speaker', name);
-            attach('sample', samples);
+            attach('sample', audioSamples);
         });
     } catch (error) {
         release();

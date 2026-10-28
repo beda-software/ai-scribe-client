@@ -1,7 +1,7 @@
 {
     "name": "@beda.software/ai-scribe-client",
     "version": "0.0.1-alpha.0",
-    "description": "Client side of the AI scribe: realtime transcription, diarization with speaker samples, transcript messages and voice commands",
+    "description": "Client side of the AI scribe: realtime transcription, diarization with voiceprints, transcript messages and voice commands",
     "license": "MIT",
     "type": "module",
     "sideEffects": false,

@@ -1,11 +1,11 @@
 import { failure, isSuccess, RemoteDataResult, success } from '@beda.software/remote-data';
 
-import { getSampleName, IdentifiedSpeakers, identifySpeakers, SpeakerSample } from './speakers.js';
+import { getVoiceprintName, IdentifiedSpeakers, identifySpeakers, Voiceprint } from './speakers.js';
 import type { DiarizedTranscript } from './types.js';
 
 export interface KnownSpeaker {
     name: string;
-    samples: Int16Array;
+    audioSamples: Int16Array;
 }
 
 export type FetchDiarization = (
@@ -20,9 +20,9 @@ export interface DiarizationResult {
 
 export interface DiarizerOptions {
     /** Kept for the whole visit: a longer phrase by the same voice never replaces them. */
-    knownSamples?: SpeakerSample[];
-    /** The diarizer accepts up to 4; each sample adds input tokens to every call. */
-    maxSampledSpeakers?: number;
+    knownVoiceprints?: Voiceprint[];
+    /** The diarizer accepts up to 4; each voiceprint adds input tokens to every call. */
+    maxVoiceprints?: number;
 }
 
 export interface Diarizer {
@@ -31,10 +31,10 @@ export interface Diarizer {
     drop: () => void;
 }
 
-/** Runs calls one at a time until every sample slot is taken, then in parallel: parallel calls could give one new voice two ids. */
+/** Runs calls one at a time until every voiceprint slot is taken, then in parallel: parallel calls could give one new voice two ids. */
 export function createDiarizer(fetchDiarization: FetchDiarization, options: DiarizerOptions = {}): Diarizer {
-    const { knownSamples = [], maxSampledSpeakers = 1 } = options;
-    let samples: SpeakerSample[] = knownSamples;
+    const { knownVoiceprints = [], maxVoiceprints = 1 } = options;
+    let voiceprints: Voiceprint[] = knownVoiceprints;
     let queue: Promise<unknown> = Promise.resolve();
     let dropped = false;
 
@@ -43,25 +43,28 @@ export function createDiarizer(fetchDiarization: FetchDiarization, options: Diar
             return failure('The diarizer was dropped');
         }
 
-        const sentSamples = samples;
+        const sentVoiceprints = voiceprints;
         const response = await fetchDiarization(
             clip,
-            sentSamples.map((sample) => ({ name: getSampleName(sample.speakerId), samples: sample.samples })),
+            sentVoiceprints.map((voiceprint) => ({
+                name: getVoiceprintName(voiceprint.speakerId),
+                audioSamples: voiceprint.audioSamples,
+            })),
         ).catch((error: unknown) => failure(error));
         if (!isSuccess(response)) {
             return response;
         }
 
-        const identified = identifySpeakers(clip, response.data.segments, sentSamples, maxSampledSpeakers);
-        samples = identified.speakerSamples.map(
-            (sample) => knownSamples.find((known) => known.speakerId === sample.speakerId) ?? sample,
+        const identified = identifySpeakers(clip, response.data.segments, sentVoiceprints, maxVoiceprints);
+        voiceprints = identified.voiceprints.map(
+            (voiceprint) => knownVoiceprints.find((known) => known.speakerId === voiceprint.speakerId) ?? voiceprint,
         );
         return success({ transcript: response.data, speakerIds: identified.speakerIdsByLabel });
     };
 
     return {
         diarize: (clip) => {
-            if (samples.length >= maxSampledSpeakers) {
+            if (voiceprints.length >= maxVoiceprints) {
                 return diarizeNow(clip);
             }
 

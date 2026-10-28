@@ -18,7 +18,7 @@ describe('diarizeClip', () => {
         const response = await diarizeClip(
             service,
             new Int16Array(convertMsToSamples(2500)),
-            [{ name: 'speaker_a', samples: new Int16Array(convertMsToSamples(5000)) }],
+            [{ name: 'speaker_a', audioSamples: new Int16Array(convertMsToSamples(5000)) }],
             () => undefined,
         );
         expect(response).toEqual(success(transcript));
@@ -28,9 +28,9 @@ describe('diarizeClip', () => {
 
 describe('buildDiarizeForm', () => {
     const clip = new Int16Array(10);
-    const knownSpeakers = [{ name: 'speaker_a', samples: new Int16Array(5) }];
+    const knownSpeakers = [{ name: 'speaker_a', audioSamples: new Int16Array(5) }];
 
-    it('sends the clip as file, then each known speaker as a name and sample pair, and asks for diarization', () => {
+    it('sends the clip as file, then each known speaker as a name and voiceprint pair, and asks for diarization', () => {
         const attachName: AttachWav = (form, field) => form.append(field, 'wav');
         const { form } = buildDiarizeForm(clip, knownSpeakers, attachName);
         expect([...form.keys()]).toEqual(['file', 'speaker', 'sample', 'diarize']);

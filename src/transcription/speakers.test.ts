@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test';
 import { convertMsToSamples } from './audio.js';
-import { getSampleName, identifySpeakers } from './speakers.js';
+import { getVoiceprintName, identifySpeakers } from './speakers.js';
 
 const buildClip = (seconds: number): Int16Array =>
     Int16Array.from({ length: convertMsToSamples(seconds * 1000) }, (_, i) => i);
@@ -10,8 +10,8 @@ const clip = buildClip(10);
 const cutClip = (start: number, end: number): Int16Array =>
     clip.slice(convertMsToSamples(start * 1000), convertMsToSamples(end * 1000));
 
-describe('identifySpeakers with one sampled speaker', () => {
-    it('gives no voice an id while none is long enough to sample', () => {
+describe('identifySpeakers with one voiceprint slot', () => {
+    it('gives no voice an id while none is long enough for a voiceprint', () => {
         const identified = identifySpeakers(
             clip,
             [
@@ -21,10 +21,10 @@ describe('identifySpeakers with one sampled speaker', () => {
             [],
             1,
         );
-        expect(identified).toEqual({ speakerIdsByLabel: new Map(), speakerSamples: [] });
+        expect(identified).toEqual({ speakerIdsByLabel: new Map(), voiceprints: [] });
     });
 
-    it('samples a long voice after a short one as B, and gives the short one the id left', () => {
+    it('takes a voiceprint of a long voice after a short one as B, and gives the short one the id left', () => {
         const identified = identifySpeakers(
             clip,
             [
@@ -35,11 +35,11 @@ describe('identifySpeakers with one sampled speaker', () => {
             1,
         );
         expect(Object.fromEntries(identified.speakerIdsByLabel)).toEqual({ A: 'A', B: 'B' });
-        expect(identified.speakerSamples).toEqual([{ speakerId: 'B', samples: cutClip(1, 4) }]);
-        expect(identified.speakerSamples[0]!.samples.buffer).not.toBe(clip.buffer);
+        expect(identified.voiceprints).toEqual([{ speakerId: 'B', audioSamples: cutClip(1, 4) }]);
+        expect(identified.voiceprints[0]!.audioSamples.buffer).not.toBe(clip.buffer);
     });
 
-    it('keeps the id for a sampled voice when short voices before it use up the ids', () => {
+    it('keeps an id for a new voiceprint when short voices before it use up the ids', () => {
         const identified = identifySpeakers(
             clip,
             [
@@ -53,30 +53,38 @@ describe('identifySpeakers with one sampled speaker', () => {
         expect(Object.fromEntries(identified.speakerIdsByLabel)).toEqual({ A: 'A', B: 'A', C: 'B' });
     });
 
-    it('gives the sampled voice its id and every other voice the id left', () => {
+    it("gives the voiceprint's voice its id and every other voice the id left", () => {
         const identified = identifySpeakers(
             clip,
             [
                 { speaker: 'A', start: 0, end: 1, text: 'Hi.' },
-                { speaker: getSampleName('B'), start: 1, end: 2, text: 'Hello.' },
+                { speaker: getVoiceprintName('B'), start: 1, end: 2, text: 'Hello.' },
                 { speaker: 'C', start: 2, end: 3, text: 'Me too.' },
             ],
-            [{ speakerId: 'B', samples: buildClip(3) }],
+            [{ speakerId: 'B', audioSamples: buildClip(3) }],
             1,
         );
-        expect(Object.fromEntries(identified.speakerIdsByLabel)).toEqual({ A: 'A', [getSampleName('B')]: 'B', C: 'A' });
+        expect(Object.fromEntries(identified.speakerIdsByLabel)).toEqual({
+            A: 'A',
+            [getVoiceprintName('B')]: 'B',
+            C: 'A',
+        });
     });
 
-    it('lengthens a sample only with a longer cut of its voice, up to 5 s', () => {
-        const sample = { speakerId: 'A', samples: buildClip(4) };
-        const getSamplesAfter = (end: number) =>
-            identifySpeakers(clip, [{ speaker: getSampleName('A'), start: 0, end, text: 'Words.' }], [sample], 1)
-                .speakerSamples;
-        expect(getSamplesAfter(3)).toEqual([sample]);
-        expect(getSamplesAfter(9)).toEqual([{ speakerId: 'A', samples: cutClip(0, 5) }]);
+    it('lengthens a voiceprint only with a longer cut of its voice, up to 5 s', () => {
+        const voiceprint = { speakerId: 'A', audioSamples: buildClip(4) };
+        const getVoiceprintsAfter = (end: number) =>
+            identifySpeakers(
+                clip,
+                [{ speaker: getVoiceprintName('A'), start: 0, end, text: 'Words.' }],
+                [voiceprint],
+                1,
+            ).voiceprints;
+        expect(getVoiceprintsAfter(3)).toEqual([voiceprint]);
+        expect(getVoiceprintsAfter(9)).toEqual([{ speakerId: 'A', audioSamples: cutClip(0, 5) }]);
     });
 
-    it('never samples a segment without words', () => {
+    it('never takes a voiceprint from a segment without words', () => {
         const identified = identifySpeakers(
             clip,
             [
@@ -87,12 +95,12 @@ describe('identifySpeakers with one sampled speaker', () => {
             1,
         );
         expect(Object.fromEntries(identified.speakerIdsByLabel)).toEqual({ B: 'A' });
-        expect(identified.speakerSamples).toEqual([{ speakerId: 'A', samples: cutClip(3, 6) }]);
+        expect(identified.voiceprints).toEqual([{ speakerId: 'A', audioSamples: cutClip(3, 6) }]);
     });
 });
 
-describe('identifySpeakers with two sampled speakers', () => {
-    it('samples two long voices in speaking order, and gives a short one before them the id left', () => {
+describe('identifySpeakers with two voiceprint slots', () => {
+    it('takes voiceprints of two long voices in speaking order, and gives a short one before them the id left', () => {
         const identified = identifySpeakers(
             clip,
             [
@@ -104,39 +112,39 @@ describe('identifySpeakers with two sampled speakers', () => {
             2,
         );
         expect(Object.fromEntries(identified.speakerIdsByLabel)).toEqual({ A: 'A', B: 'B', C: 'C' });
-        expect(identified.speakerSamples.map((sample) => sample.speakerId)).toEqual(['B', 'C']);
+        expect(identified.voiceprints.map((voiceprint) => voiceprint.speakerId)).toEqual(['B', 'C']);
     });
 
-    it('gives a short new voice no id while a sample slot is free', () => {
+    it('gives a short new voice no id while a voiceprint slot is free', () => {
         const identified = identifySpeakers(
             clip,
             [
-                { speaker: getSampleName('A'), start: 0, end: 1, text: 'Hello.' },
+                { speaker: getVoiceprintName('A'), start: 0, end: 1, text: 'Hello.' },
                 { speaker: 'A', start: 1, end: 1.5, text: 'Hi.' },
             ],
-            [{ speakerId: 'A', samples: buildClip(3) }],
+            [{ speakerId: 'A', audioSamples: buildClip(3) }],
             2,
         );
-        expect(Object.fromEntries(identified.speakerIdsByLabel)).toEqual({ [getSampleName('A')]: 'A' });
+        expect(Object.fromEntries(identified.speakerIdsByLabel)).toEqual({ [getVoiceprintName('A')]: 'A' });
     });
 
-    it('gives every voice besides the two sampled ones C', () => {
+    it('gives every voice besides the two with voiceprints C', () => {
         const identified = identifySpeakers(
             clip,
             [
-                { speaker: getSampleName('A'), start: 0, end: 1, text: 'Hello.' },
-                { speaker: getSampleName('B'), start: 1, end: 2, text: 'Hi.' },
+                { speaker: getVoiceprintName('A'), start: 0, end: 1, text: 'Hello.' },
+                { speaker: getVoiceprintName('B'), start: 1, end: 2, text: 'Hi.' },
                 { speaker: 'A', start: 2, end: 3, text: 'Me too.' },
             ],
             [
-                { speakerId: 'A', samples: buildClip(3) },
-                { speakerId: 'B', samples: buildClip(3) },
+                { speakerId: 'A', audioSamples: buildClip(3) },
+                { speakerId: 'B', audioSamples: buildClip(3) },
             ],
             2,
         );
         expect(Object.fromEntries(identified.speakerIdsByLabel)).toEqual({
-            [getSampleName('A')]: 'A',
-            [getSampleName('B')]: 'B',
+            [getVoiceprintName('A')]: 'A',
+            [getVoiceprintName('B')]: 'B',
             A: 'C',
         });
     });

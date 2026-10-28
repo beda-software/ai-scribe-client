@@ -4,7 +4,7 @@ import { failure, success } from '@beda.software/remote-data';
 import { convertMsToSamples } from './audio.js';
 import type { FetchDiarization } from './diarization.js';
 import type { DiarizedTranscript, TranscribeSegment } from './types.js';
-import { checkReading, checkVoiceSample, cutVoiceSample, getReadingScore, splitWords } from './voice-sample.js';
+import { checkReading, checkVoiceprint, cutVoiceprintFromTake, getReadingScore, splitWords } from './voiceprint.js';
 
 const SCRIPT =
     'The quick brown fox jumps over the lazy dog. A gentle breeze moves through the tall green trees, and the ' +
@@ -23,7 +23,7 @@ const buildTranscript = (text: string, segments = [buildSegment(0, 8)]): Diarize
     llmStats: [],
 });
 
-describe('checkVoiceSample', () => {
+describe('checkVoiceprint', () => {
     it('rejects a take under the minimum without calling the service', async () => {
         let calls = 0;
         const fetchDiarization: FetchDiarization = () => {
@@ -31,19 +31,19 @@ describe('checkVoiceSample', () => {
             return Promise.resolve(success(buildTranscript(READING)));
         };
 
-        expect(await checkVoiceSample(buildTake(4.9), SCRIPT, fetchDiarization)).toEqual(
+        expect(await checkVoiceprint(buildTake(4.9), SCRIPT, fetchDiarization)).toEqual(
             success({ status: 'too-short' }),
         );
         expect(calls).toBe(0);
     });
 
-    it('accepts a faithful reading and keeps the cut sample', async () => {
+    it('accepts a faithful reading and keeps the cut voiceprint', async () => {
         const take = buildTake(10);
         const fetchDiarization: FetchDiarization = () =>
             Promise.resolve(success(buildTranscript(READING, [buildSegment(1, 9)])));
 
-        expect(await checkVoiceSample(take, SCRIPT, fetchDiarization)).toEqual(
-            success({ status: 'accepted', sample: take.subarray(1 * SAMPLE_RATE, 6 * SAMPLE_RATE) }),
+        expect(await checkVoiceprint(take, SCRIPT, fetchDiarization)).toEqual(
+            success({ status: 'accepted', audioSamples: take.subarray(1 * SAMPLE_RATE, 6 * SAMPLE_RATE) }),
         );
     });
 
@@ -53,9 +53,9 @@ describe('checkVoiceSample', () => {
             Promise.resolve(success(buildTranscript(READING, [buildSegment(1, 3)])));
         const failed: FetchDiarization = () => Promise.resolve(failure('offline'));
 
-        expect(await checkVoiceSample(buildTake(10), SCRIPT, mismatch)).toEqual(success({ status: 'mismatch' }));
-        expect(await checkVoiceSample(buildTake(10), SCRIPT, shortSpeech)).toEqual(success({ status: 'too-short' }));
-        expect(await checkVoiceSample(buildTake(10), SCRIPT, failed)).toEqual(failure('offline'));
+        expect(await checkVoiceprint(buildTake(10), SCRIPT, mismatch)).toEqual(success({ status: 'mismatch' }));
+        expect(await checkVoiceprint(buildTake(10), SCRIPT, shortSpeech)).toEqual(success({ status: 'too-short' }));
+        expect(await checkVoiceprint(buildTake(10), SCRIPT, failed)).toEqual(failure('offline'));
     });
 });
 
@@ -96,16 +96,16 @@ describe('checkReading', () => {
     });
 });
 
-describe('cutVoiceSample', () => {
+describe('cutVoiceprintFromTake', () => {
     const take = Int16Array.from({ length: 10 * SAMPLE_RATE }, (_, i) => i % 1000);
 
     it('keeps five seconds from the first segment on', () => {
-        const sample = cutVoiceSample(take, [buildSegment(1.5, 4), buildSegment(4, 8)]);
-        expect(sample).toEqual(take.subarray(1.5 * SAMPLE_RATE, 6.5 * SAMPLE_RATE));
+        const audioSamples = cutVoiceprintFromTake(take, [buildSegment(1.5, 4), buildSegment(4, 8)]);
+        expect(audioSamples).toEqual(take.subarray(1.5 * SAMPLE_RATE, 6.5 * SAMPLE_RATE));
     });
 
     it('rejects speech shorter than five seconds, or none', () => {
-        expect(cutVoiceSample(take, [buildSegment(1, 3), buildSegment(3, 5.9)])).toBeUndefined();
-        expect(cutVoiceSample(take, [])).toBeUndefined();
+        expect(cutVoiceprintFromTake(take, [buildSegment(1, 3), buildSegment(3, 5.9)])).toBeUndefined();
+        expect(cutVoiceprintFromTake(take, [])).toBeUndefined();
     });
 });

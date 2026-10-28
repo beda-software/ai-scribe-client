@@ -3,7 +3,7 @@ import { isSuccess, RemoteDataResult, success } from '@beda.software/remote-data
 
 import { convertMsToSamples } from './audio.js';
 import { createDiarizer, DiarizationResult, FetchDiarization, KnownSpeaker } from './diarization.js';
-import { getSampleName } from './speakers.js';
+import { getVoiceprintName } from './speakers.js';
 import type { DiarizedTranscript } from './types.js';
 
 const buildClip = (seconds: number): Int16Array => new Int16Array(convertMsToSamples(seconds * 1000));
@@ -24,14 +24,14 @@ const getSpeakerIds = (result: RemoteDataResult<DiarizationResult>): Record<stri
 const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('createDiarizer', () => {
-    it('sends the next call only once the previous one has answered, with the sample it cut', async () => {
+    it('sends the next call only once the previous one has answered, with the voiceprint it cut', async () => {
         const sentSpeakers: KnownSpeaker[][] = [];
         let answerFirst!: () => void;
         const fetchDiarization: FetchDiarization = (_clip, knownSpeakers) => {
             sentSpeakers.push(knownSpeakers);
             return sentSpeakers.length === 1
                 ? new Promise((resolve) => (answerFirst = () => resolve(success(buildTranscriptOfTurns(['A', 3])))))
-                : Promise.resolve(success(buildTranscriptOfTurns([getSampleName('A'), 1])));
+                : Promise.resolve(success(buildTranscriptOfTurns([getVoiceprintName('A'), 1])));
         };
         const diarizer = createDiarizer(fetchDiarization);
 
@@ -42,17 +42,19 @@ describe('createDiarizer', () => {
 
         answerFirst();
         const results = await Promise.all([first, second]);
-        expect(sentSpeakers).toEqual([[], [{ name: getSampleName('A'), samples: buildClip(3) }]]);
+        expect(sentSpeakers).toEqual([[], [{ name: getVoiceprintName('A'), audioSamples: buildClip(3) }]]);
         expect(
             results.map((result) => (isSuccess(result) ? Object.fromEntries(result.data.speakerIds) : null)),
-        ).toEqual([{ A: 'A' }, { [getSampleName('A')]: 'A' }]);
+        ).toEqual([{ A: 'A' }, { [getVoiceprintName('A')]: 'A' }]);
     });
 
-    it('sends calls in parallel once every sample slot is taken', async () => {
+    it('sends calls in parallel once every voiceprint slot is taken', async () => {
         let callCount = 0;
         const fetchDiarization: FetchDiarization = () => {
             callCount += 1;
-            return callCount === 1 ? Promise.resolve(success(buildTranscriptOfTurns(['A', 3]))) : new Promise(() => undefined);
+            return callCount === 1
+                ? Promise.resolve(success(buildTranscriptOfTurns(['A', 3])))
+                : new Promise(() => undefined);
         };
         const diarizer = createDiarizer(fetchDiarization);
         await diarizer.diarize(buildClip(3));
@@ -63,31 +65,35 @@ describe('createDiarizer', () => {
         expect(callCount).toBe(3);
     });
 
-    it('sends a known sample from the first call, in parallel, and keeps it over a longer phrase', async () => {
+    it('sends a known voiceprint from the first call, in parallel, and keeps it over a longer phrase', async () => {
         const sentSpeakers: KnownSpeaker[][] = [];
         const fetchDiarization: FetchDiarization = (_clip, knownSpeakers) => {
             sentSpeakers.push(knownSpeakers);
-            return Promise.resolve(success(buildTranscriptOfTurns([getSampleName('A'), 5])));
+            return Promise.resolve(success(buildTranscriptOfTurns([getVoiceprintName('A'), 5])));
         };
-        const knownSample = buildClip(1);
-        const diarizer = createDiarizer(fetchDiarization, { knownSamples: [{ speakerId: 'A', samples: knownSample }] });
+        const knownAudioSamples = buildClip(1);
+        const diarizer = createDiarizer(fetchDiarization, {
+            knownVoiceprints: [{ speakerId: 'A', audioSamples: knownAudioSamples }],
+        });
 
         const results = await Promise.all([diarizer.diarize(buildClip(5)), diarizer.diarize(buildClip(5))]);
         expect(
             results.map((result) => (isSuccess(result) ? Object.fromEntries(result.data.speakerIds) : null)),
-        ).toEqual([{ [getSampleName('A')]: 'A' }, { [getSampleName('A')]: 'A' }]);
+        ).toEqual([{ [getVoiceprintName('A')]: 'A' }, { [getVoiceprintName('A')]: 'A' }]);
 
         await diarizer.diarize(buildClip(5));
-        expect(sentSpeakers).toEqual(Array(3).fill([{ name: getSampleName('A'), samples: knownSample }]));
+        expect(sentSpeakers).toEqual(
+            Array(3).fill([{ name: getVoiceprintName('A'), audioSamples: knownAudioSamples }]),
+        );
     });
 
-    it('gives every voice besides a known sample the other id', async () => {
+    it('gives every voice besides a known voiceprint the other id', async () => {
         const fetchDiarization: FetchDiarization = () =>
             Promise.resolve(
                 success({
                     text: 'Words.',
                     segments: [
-                        { speaker: getSampleName('A'), start: 0, end: 1, text: 'Words.' },
+                        { speaker: getVoiceprintName('A'), start: 0, end: 1, text: 'Words.' },
                         { speaker: 'A', start: 1, end: 2, text: 'Words.' },
                         { speaker: 'B', start: 2, end: 3, text: 'Words.' },
                     ],
@@ -95,18 +101,18 @@ describe('createDiarizer', () => {
                 }),
             );
         const diarizer = createDiarizer(fetchDiarization, {
-            knownSamples: [{ speakerId: 'A', samples: buildClip(5) }],
+            knownVoiceprints: [{ speakerId: 'A', audioSamples: buildClip(5) }],
         });
 
         const result = await diarizer.diarize(buildClip(3));
         expect(isSuccess(result) ? Object.fromEntries(result.data.speakerIds) : null).toEqual({
-            [getSampleName('A')]: 'A',
+            [getVoiceprintName('A')]: 'A',
             A: 'B',
             B: 'B',
         });
     });
 
-    it('gives no voice an id until one leaves a sample', async () => {
+    it('gives no voice an id until one leaves a voiceprint', async () => {
         const sentSpeakers: KnownSpeaker[][] = [];
         const fetchDiarization: FetchDiarization = (_clip, knownSpeakers) => {
             sentSpeakers.push(knownSpeakers);
@@ -119,13 +125,13 @@ describe('createDiarizer', () => {
         expect(sentSpeakers).toEqual([[], []]);
     });
 
-    it('gives two short voices no id while neither leaves a sample', async () => {
+    it('gives two short voices no id while neither leaves a voiceprint', async () => {
         const diarizer = createDiarizer(() => Promise.resolve(success(buildTranscriptOfTurns(['A', 1], ['B', 1]))));
 
         expect(getSpeakerIds(await diarizer.diarize(buildClip(2)))).toEqual({});
     });
 
-    it('gives a short first voice A and samples the long voice after it as B', async () => {
+    it('gives a short first voice A and takes a voiceprint of the long voice after it as B', async () => {
         const sentSpeakers: KnownSpeaker[][] = [];
         const fetchDiarization: FetchDiarization = (_clip, knownSpeakers) => {
             sentSpeakers.push(knownSpeakers);
@@ -135,7 +141,7 @@ describe('createDiarizer', () => {
 
         expect(getSpeakerIds(await diarizer.diarize(buildClip(4)))).toEqual({ A: 'A', B: 'B' });
         await diarizer.diarize(buildClip(4));
-        expect(sentSpeakers[1]).toEqual([{ name: getSampleName('B'), samples: buildClip(3) }]);
+        expect(sentSpeakers[1]).toEqual([{ name: getVoiceprintName('B'), audioSamples: buildClip(3) }]);
     });
 
     it('resolves a fetch that throws as a failure', async () => {
