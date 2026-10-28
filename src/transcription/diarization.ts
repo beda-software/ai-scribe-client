@@ -1,31 +1,27 @@
 import { failure, isSuccess, RemoteDataResult, success } from '@beda.software/remote-data';
 
-import {
-    getVoiceprintName,
-    IdentifiedSpeakers,
-    identifySpeakers,
-    validateKnownVoiceprints,
-    Voiceprint,
-} from './speakers.js';
+import { getVoiceprintLabel, identifySpeakers, validateKnownVoiceprints, Voiceprint } from './speakers.js';
 import type { DiarizedTranscript } from './types.js';
 
-export interface KnownSpeaker {
-    name: string;
-    audioSamples: Int16Array;
+/** A voiceprint the diarizer should recognise: `label` is what it calls that voice in its answer. */
+export interface KnownVoiceprint {
+    label: string;
+    samples: Int16Array;
 }
 
 export type FetchDiarization = (
     clip: Int16Array,
-    knownSpeakers: KnownSpeaker[],
+    knownVoiceprints: KnownVoiceprint[],
 ) => Promise<RemoteDataResult<DiarizedTranscript>>;
 
 export interface DiarizationResult {
     transcript: DiarizedTranscript;
-    speakerIds: IdentifiedSpeakers['speakerIdsByLabel'];
+    /** Each diarizer label → the speaker's id in this visit; a voice that can't be told yet has none. */
+    speakerIds: ReadonlyMap<string, string>;
 }
 
 export interface DiarizerOptions {
-    /** Kept for the whole visit; each has its own letter among the first `maxVoiceprints + 1`, or the diarizer throws. */
+    /** Kept for the whole visit; each has its own speaker id among the first `maxVoiceprints + 1`, or the diarizer throws. */
     knownVoiceprints?: Voiceprint[];
     /** The diarizer accepts up to 4; each voiceprint adds input tokens to every call. */
     maxVoiceprints?: number;
@@ -54,8 +50,8 @@ export function createDiarizer(fetchDiarization: FetchDiarization, options: Diar
         const response = await fetchDiarization(
             clip,
             sentVoiceprints.map((voiceprint) => ({
-                name: getVoiceprintName(voiceprint.speakerId),
-                audioSamples: voiceprint.audioSamples,
+                label: getVoiceprintLabel(voiceprint.speakerId),
+                samples: voiceprint.samples,
             })),
         ).catch((error: unknown) => failure(error));
         if (!isSuccess(response)) {
@@ -66,7 +62,7 @@ export function createDiarizer(fetchDiarization: FetchDiarization, options: Diar
         voiceprints = identified.voiceprints.map(
             (voiceprint) => knownVoiceprints.find((known) => known.speakerId === voiceprint.speakerId) ?? voiceprint,
         );
-        return success({ transcript: response.data, speakerIds: identified.speakerIdsByLabel });
+        return success({ transcript: response.data, speakerIds: identified.speakerIds });
     };
 
     return {

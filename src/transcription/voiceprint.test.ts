@@ -3,8 +3,8 @@ import { failure, success } from '@beda.software/remote-data';
 
 import { convertMsToSamples } from './audio.js';
 import type { FetchDiarization } from './diarization.js';
-import type { DiarizedTranscript, TranscribeSegment } from './types.js';
-import { checkReading, checkVoiceprint, cutVoiceprintFromTake, getReadingScore, splitWords } from './voiceprint.js';
+import type { DiarizedTranscript, TranscriptSegment } from './types.js';
+import { checkReading, checkVoiceprint, cutVoiceprintFromClip, getReadingScore, splitWords } from './voiceprint.js';
 
 const SCRIPT =
     'The quick brown fox jumps over the lazy dog. A gentle breeze moves through the tall green trees, and the ' +
@@ -12,10 +12,10 @@ const SCRIPT =
 const READING = 'The quick brown fox jumps over the lazy dog, a gentle breeze moves through the trees.';
 const SAMPLE_RATE = 24000;
 
-const buildTake = (seconds: number): Int16Array =>
+const buildClip = (seconds: number): Int16Array =>
     Int16Array.from({ length: convertMsToSamples(seconds * 1000) }, (_, i) => i % 1000);
 
-const buildSegment = (start: number, end: number): TranscribeSegment => ({ speaker: 'A', start, end, text: 'Words.' });
+const buildSegment = (start: number, end: number): TranscriptSegment => ({ speaker: 'A', start, end, text: 'Words.' });
 
 const buildTranscript = (text: string, segments = [buildSegment(0, 8)]): DiarizedTranscript => ({
     text,
@@ -24,26 +24,26 @@ const buildTranscript = (text: string, segments = [buildSegment(0, 8)]): Diarize
 });
 
 describe('checkVoiceprint', () => {
-    it('rejects a take under the minimum without calling the service', async () => {
+    it('rejects a clip under the minimum without calling the service', async () => {
         let calls = 0;
         const fetchDiarization: FetchDiarization = () => {
             calls += 1;
             return Promise.resolve(success(buildTranscript(READING)));
         };
 
-        expect(await checkVoiceprint(buildTake(4.9), SCRIPT, fetchDiarization)).toEqual(
+        expect(await checkVoiceprint(buildClip(4.9), SCRIPT, fetchDiarization)).toEqual(
             success({ status: 'too-short' }),
         );
         expect(calls).toBe(0);
     });
 
     it('accepts a faithful reading and keeps the cut voiceprint', async () => {
-        const take = buildTake(10);
+        const clip = buildClip(10);
         const fetchDiarization: FetchDiarization = () =>
             Promise.resolve(success(buildTranscript(READING, [buildSegment(1, 9)])));
 
-        expect(await checkVoiceprint(take, SCRIPT, fetchDiarization)).toEqual(
-            success({ status: 'accepted', audioSamples: take.subarray(1 * SAMPLE_RATE, 6 * SAMPLE_RATE) }),
+        expect(await checkVoiceprint(clip, SCRIPT, fetchDiarization)).toEqual(
+            success({ status: 'accepted', samples: clip.subarray(1 * SAMPLE_RATE, 6 * SAMPLE_RATE) }),
         );
     });
 
@@ -53,9 +53,9 @@ describe('checkVoiceprint', () => {
             Promise.resolve(success(buildTranscript(READING, [buildSegment(1, 3)])));
         const failed: FetchDiarization = () => Promise.resolve(failure('offline'));
 
-        expect(await checkVoiceprint(buildTake(10), SCRIPT, mismatch)).toEqual(success({ status: 'mismatch' }));
-        expect(await checkVoiceprint(buildTake(10), SCRIPT, shortSpeech)).toEqual(success({ status: 'too-short' }));
-        expect(await checkVoiceprint(buildTake(10), SCRIPT, failed)).toEqual(failure('offline'));
+        expect(await checkVoiceprint(buildClip(10), SCRIPT, mismatch)).toEqual(success({ status: 'mismatch' }));
+        expect(await checkVoiceprint(buildClip(10), SCRIPT, shortSpeech)).toEqual(success({ status: 'too-short' }));
+        expect(await checkVoiceprint(buildClip(10), SCRIPT, failed)).toEqual(failure('offline'));
     });
 });
 
@@ -96,16 +96,16 @@ describe('checkReading', () => {
     });
 });
 
-describe('cutVoiceprintFromTake', () => {
-    const take = Int16Array.from({ length: 10 * SAMPLE_RATE }, (_, i) => i % 1000);
+describe('cutVoiceprintFromClip', () => {
+    const clip = Int16Array.from({ length: 10 * SAMPLE_RATE }, (_, i) => i % 1000);
 
     it('keeps five seconds from the first segment on', () => {
-        const audioSamples = cutVoiceprintFromTake(take, [buildSegment(1.5, 4), buildSegment(4, 8)]);
-        expect(audioSamples).toEqual(take.subarray(1.5 * SAMPLE_RATE, 6.5 * SAMPLE_RATE));
+        const samples = cutVoiceprintFromClip(clip, [buildSegment(1.5, 4), buildSegment(4, 8)]);
+        expect(samples).toEqual(clip.subarray(1.5 * SAMPLE_RATE, 6.5 * SAMPLE_RATE));
     });
 
     it('rejects speech shorter than five seconds, or none', () => {
-        expect(cutVoiceprintFromTake(take, [buildSegment(1, 3), buildSegment(3, 5.9)])).toBeUndefined();
-        expect(cutVoiceprintFromTake(take, [])).toBeUndefined();
+        expect(cutVoiceprintFromClip(clip, [buildSegment(1, 3), buildSegment(3, 5.9)])).toBeUndefined();
+        expect(cutVoiceprintFromClip(clip, [])).toBeUndefined();
     });
 });

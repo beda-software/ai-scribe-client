@@ -2,7 +2,7 @@ import { isSuccess, RemoteDataResult } from '@beda.software/remote-data';
 
 import { cutSeconds } from './audio.js';
 import type { DiarizationResult } from './diarization.js';
-import type { TranscribeSegment } from './types.js';
+import type { TranscriptSegment } from './types.js';
 
 // `listening` is a phrase still being spoken, `transcribing` one that is waiting for its transcript.
 export type TranscriptMessage =
@@ -11,7 +11,7 @@ export type TranscriptMessage =
 
 export interface DiarizedSegment {
     message: TranscriptMessage;
-    segment: TranscribeSegment;
+    segment: TranscriptSegment;
 }
 
 export type DiarizationOutcome =
@@ -22,17 +22,17 @@ export type DiarizationOutcome =
 // A diarized segment ends before its last word fades out.
 const SEGMENT_TAIL_SECONDS = 0.8;
 
-export function createListeningMessage(itemId: string, spokenAt: number): TranscriptMessage {
-    return { id: itemId, text: '', spokenAt, status: 'listening' };
+export function createListeningMessage(phraseId: string, spokenAt: number): TranscriptMessage {
+    return { id: phraseId, text: '', spokenAt, status: 'listening' };
 }
 
 export function createMessage(
-    itemId: string,
+    phraseId: string,
     text: string,
     status: 'processing' | 'raw',
     spokenAt: number | undefined,
 ): TranscriptMessage {
-    return { id: itemId, text, spokenAt: spokenAt ?? Date.now(), status };
+    return { id: phraseId, text, spokenAt: spokenAt ?? Date.now(), status };
 }
 
 export function markMessageTranscribing(messages: readonly TranscriptMessage[], id: string): TranscriptMessage[] {
@@ -95,18 +95,18 @@ export function getDiarizationOutcome(
 
 function buildDiarizedSegments(
     message: TranscriptMessage,
-    segments: TranscribeSegment[],
+    segments: TranscriptSegment[],
     speakerIds: ReadonlyMap<string, string>,
 ): DiarizedSegment[] {
     return segments.map((segment, index): DiarizedSegment => {
-        const row = {
+        const fields = {
             id: `${message.id}-${index}`,
             text: segment.text.trim(),
             spokenAt: message.spokenAt + segment.start * 1000,
         };
         const speakerId = speakerIds.get(segment.speaker);
         return {
-            message: speakerId ? { ...row, status: 'diarized', speakerId } : { ...row, status: 'raw' },
+            message: speakerId ? { ...fields, status: 'diarized', speakerId } : { ...fields, status: 'raw' },
             segment,
         };
     });
@@ -132,14 +132,14 @@ export function applyDiarization(
     return [...messages.slice(0, index), ...replacement, ...messages.slice(index + 1)];
 }
 
-export function splitPhraseAudio(
-    phrase: Int16Array,
+export function splitPhraseClip(
+    clip: Int16Array,
     segments: DiarizedSegment[],
-): Array<[messageId: string, samples: Int16Array]> {
+): Array<[messageId: string, clip: Int16Array]> {
     return segments
         .map(({ message, segment }): [string, Int16Array] => [
             message.id,
-            cutSeconds(phrase, segment.start, segment.end + SEGMENT_TAIL_SECONDS),
+            cutSeconds(clip, segment.start, segment.end + SEGMENT_TAIL_SECONDS),
         ])
-        .filter(([, samples]) => samples.length > 0);
+        .filter(([, segmentClip]) => segmentClip.length > 0);
 }

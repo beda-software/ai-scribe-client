@@ -19,7 +19,7 @@ export interface RealtimeOptions {
 export interface RealtimeSession {
     // Every server event, plus the made-up `transport.closed` and `parse.error`.
     onEvent: (handler: (event: RealtimeEvent) => void) => () => void;
-    sendAudio: (samples: Float32Array, inputRate: number) => void;
+    sendChunk: (samples: Float32Array, inputRate: number) => void;
     // Sends the silence server VAD needs to close the phrase in progress.
     pause: () => void;
     clear: () => void;
@@ -54,7 +54,7 @@ export async function connectRealtime({
         }
 
         socket.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: encodeBase64(samples) }));
-        phrases.addSentAudio(samples, isSilence);
+        phrases.addSentChunk(samples, isSilence);
     };
 
     let markConfigured: () => void = () => undefined;
@@ -101,7 +101,7 @@ export async function connectRealtime({
                 eventHandlers.delete(handler);
             };
         },
-        sendAudio: (samples, inputRate) => sendSamples(convertFloatToInt16(resampleTo24k(samples, inputRate)), false),
+        sendChunk: (samples, inputRate) => sendSamples(convertFloatToInt16(resampleTo24k(samples, inputRate)), false),
         pause: () => sendSamples(new Int16Array(convertMsToSamples(silenceMs + PAUSE_EXTRA_SILENCE_MS)), true),
         clear: () => {
             phrases.dropOpenPhrase();

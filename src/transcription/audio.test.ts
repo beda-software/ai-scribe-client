@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vite-plus/test';
 import {
-    appendToClipBuffer,
+    appendToChunkBuffer,
     buildWav,
-    ClipBuffer,
+    ChunkBuffer,
     convertFloatToInt16,
-    createClipBuffer,
+    createChunkBuffer,
     cutClip,
-    dropAudioBefore,
+    dropChunksBefore,
     encodeBase64,
     getEndMs,
     getLevel,
@@ -63,12 +63,12 @@ describe('getLevel', () => {
     });
 });
 
-describe('clip buffer', () => {
+describe('chunk buffer', () => {
     // 24 samples per ms, sent as four 2.5 ms chunks; sample i holds i so positions are readable.
-    const buildBuffer = (): ClipBuffer => {
-        const buffer = createClipBuffer();
+    const buildBuffer = (): ChunkBuffer => {
+        const buffer = createChunkBuffer();
         for (let chunk = 0; chunk < 4; chunk++) {
-            appendToClipBuffer(buffer, {
+            appendToChunkBuffer(buffer, {
                 samples: Int16Array.from({ length: 60 }, (_, i) => chunk * 60 + i),
                 sentAt: 0,
                 isSilence: false,
@@ -89,14 +89,14 @@ describe('clip buffer', () => {
     it('drops only whole chunks ending before the cutoff and keeps session positions', () => {
         const buffer = buildBuffer();
 
-        dropAudioBefore(buffer, 5);
+        dropChunksBefore(buffer, 5);
         expect(buffer.chunks).toHaveLength(2);
         expect(Array.from(cutClip(buffer, 6, 7))).toEqual(Array.from({ length: 24 }, (_, i) => 144 + i));
     });
 
     it('returns silence for dropped audio and clamps past the end', () => {
         const buffer = buildBuffer();
-        dropAudioBefore(buffer, 5);
+        dropChunksBefore(buffer, 5);
 
         const clip = cutClip(buffer, 4, 20);
         expect(clip).toHaveLength(144);
@@ -107,10 +107,10 @@ describe('clip buffer', () => {
 
 describe('getSpokenAt', () => {
     // 100 ms chunks (2400 samples) sent at known clock times.
-    const buildTimedBuffer = (chunks: Array<{ sentAt: number; isSilence: boolean }>): ClipBuffer => {
-        const buffer = createClipBuffer();
+    const buildTimedBuffer = (chunks: Array<{ sentAt: number; isSilence: boolean }>): ChunkBuffer => {
+        const buffer = createChunkBuffer();
         chunks.forEach(({ sentAt, isSilence }) =>
-            appendToClipBuffer(buffer, { samples: new Int16Array(2400), sentAt, isSilence }),
+            appendToChunkBuffer(buffer, { samples: new Int16Array(2400), sentAt, isSilence }),
         );
         return buffer;
     };

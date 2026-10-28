@@ -1,6 +1,6 @@
 export { buildWav, convertFloatToInt16, cutSeconds, getLevel, parseWav, resampleTo24k } from './audio.js';
 export { createDiarizer } from './diarization.js';
-export type { DiarizationResult, Diarizer, DiarizerOptions, FetchDiarization, KnownSpeaker } from './diarization.js';
+export type { DiarizationResult, Diarizer, DiarizerOptions, FetchDiarization, KnownVoiceprint } from './diarization.js';
 export type { Voiceprint } from './speakers.js';
 export type { PhraseClip, RealtimeEvent } from './phrases.js';
 export { connectRealtime } from './realtime.js';
@@ -18,9 +18,9 @@ export {
     markMessageTranscribing,
     removeMessage,
     removePhrase,
-    splitPhraseAudio,
+    splitPhraseClip,
 } from './transcript.js';
 export type { DiarizationOutcome, DiarizedSegment, TranscriptMessage } from './transcript.js';
-export type { DiarizedTranscript, TranscribeSegment } from './types.js';
-export { checkVoiceprint, MAX_VOICEPRINT_TAKE_SECONDS, MIN_VOICEPRINT_TAKE_SECONDS } from './voiceprint.js';
+export type { DiarizedTranscript, TranscriptSegment } from './types.js';
+export { checkVoiceprint, MAX_VOICEPRINT_CLIP_SECONDS, MIN_VOICEPRINT_CLIP_SECONDS } from './voiceprint.js';
 export type { VoiceprintCheck } from './voiceprint.js';

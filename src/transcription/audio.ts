@@ -13,12 +13,12 @@ interface SentChunk {
 }
 
 // The 24 kHz Int16 audio sent this session, as chunks; older chunks are dropped once no phrase needs them.
-export interface ClipBuffer {
+export interface ChunkBuffer {
     chunks: SentChunk[];
     endSample: number;
 }
 
-export function createClipBuffer(): ClipBuffer {
+export function createChunkBuffer(): ChunkBuffer {
     return { chunks: [], endSample: 0 };
 }
 
@@ -71,13 +71,13 @@ export function getLevel(samples: Float32Array): number {
     return Math.min(1, Math.sqrt(sumOfSquares / samples.length));
 }
 
-export function appendToClipBuffer(buffer: ClipBuffer, chunk: Omit<SentChunk, 'start'>): void {
+export function appendToChunkBuffer(buffer: ChunkBuffer, chunk: Omit<SentChunk, 'start'>): void {
     buffer.chunks.push({ ...chunk, start: buffer.endSample });
     buffer.endSample += chunk.samples.length;
 }
 
 /** Copies [startMs, endMs) of the session audio; samples already dropped come back as silence. */
-export function cutClip(buffer: ClipBuffer, startMs: number, endMs: number): Int16Array {
+export function cutClip(buffer: ChunkBuffer, startMs: number, endMs: number): Int16Array {
     const start = convertMsToSamples(startMs);
     const end = Math.min(convertMsToSamples(endMs), buffer.endSample);
     const clip = new Int16Array(Math.max(0, end - start));
@@ -97,13 +97,13 @@ export function cutSeconds(samples: Int16Array, startSeconds: number, endSeconds
 }
 
 /** Drops whole chunks that end at or before `ms`. */
-export function dropAudioBefore(buffer: ClipBuffer, ms: number): void {
+export function dropChunksBefore(buffer: ChunkBuffer, ms: number): void {
     const cutoff = convertMsToSamples(ms);
     const firstKept = buffer.chunks.findIndex((chunk) => chunk.start + chunk.samples.length > cutoff);
     buffer.chunks.splice(0, firstKept === -1 ? buffer.chunks.length : firstKept);
 }
 
-export function getEndMs(buffer: ClipBuffer): number {
+export function getEndMs(buffer: ChunkBuffer): number {
     return (buffer.endSample * 1000) / OUTPUT_SAMPLE_RATE;
 }
 
@@ -112,7 +112,7 @@ export function convertMsToSamples(ms: number): number {
 }
 
 /** Clock time of a session-audio position; inside made-up silence it moves to where real audio resumes. */
-export function getSpokenAt(buffer: ClipBuffer, audioStartMs: number, now: number): number {
+export function getSpokenAt(buffer: ChunkBuffer, audioStartMs: number, now: number): number {
     const position = convertMsToSamples(audioStartMs);
     const firstIndex = buffer.chunks.findIndex((chunk) => position < chunk.start + chunk.samples.length);
     const chunk = firstIndex === -1 ? undefined : buffer.chunks.slice(firstIndex).find((c) => !c.isSilence);
@@ -147,11 +147,11 @@ export function buildWav(samples: Int16Array): Uint8Array {
 }
 
 /** Reads back the samples of a WAV in the format `buildWav` writes; throws on any other file. */
-export function parseWav(bytes: Uint8Array): Int16Array {
-    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    const dataBytes = bytes.length >= WAV_HEADER_BYTES ? view.getUint32(40, true) : 0;
+export function parseWav(wav: Uint8Array): Int16Array {
+    const view = new DataView(wav.buffer, wav.byteOffset, wav.byteLength);
+    const dataBytes = wav.length >= WAV_HEADER_BYTES ? view.getUint32(40, true) : 0;
     const isBuiltWav =
-        bytes.length >= WAV_HEADER_BYTES + dataBytes &&
+        wav.length >= WAV_HEADER_BYTES + dataBytes &&
         getAscii(view, 0) === 'RIFF' &&
         getAscii(view, 8) === 'WAVE' &&
         getAscii(view, 12) === 'fmt ' &&
@@ -164,7 +164,7 @@ export function parseWav(bytes: Uint8Array): Int16Array {
         throw new Error('Not a 24 kHz mono PCM16 WAV');
     }
 
-    return new Int16Array(bytes.slice(WAV_HEADER_BYTES, WAV_HEADER_BYTES + dataBytes).buffer);
+    return new Int16Array(wav.slice(WAV_HEADER_BYTES, WAV_HEADER_BYTES + dataBytes).buffer);
 }
 
 function writeAscii(view: DataView, offset: number, text: string): void {

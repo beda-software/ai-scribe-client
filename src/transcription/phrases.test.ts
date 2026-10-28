@@ -4,7 +4,7 @@ import { createPhraseTracker } from './phrases.js';
 
 const sendChunks = (tracker: ReturnType<typeof createPhraseTracker>, count: number): void => {
     for (let chunk = 0; chunk < count; chunk++) {
-        tracker.addSentAudio(new Int16Array(convertMsToSamples(100)).fill(chunk), false);
+        tracker.addSentChunk(new Int16Array(convertMsToSamples(100)).fill(chunk), false);
     }
 };
 

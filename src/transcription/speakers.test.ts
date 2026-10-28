@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test';
 import { convertMsToSamples } from './audio.js';
-import { getVoiceprintName, identifySpeakers, validateKnownVoiceprints } from './speakers.js';
+import { getVoiceprintLabel, identifySpeakers, validateKnownVoiceprints } from './speakers.js';
 
 const buildClip = (seconds: number): Int16Array =>
     Int16Array.from({ length: convertMsToSamples(seconds * 1000) }, (_, i) => i);
@@ -21,7 +21,7 @@ describe('identifySpeakers with one voiceprint slot', () => {
             [],
             1,
         );
-        expect(identified).toEqual({ speakerIdsByLabel: new Map(), voiceprints: [] });
+        expect(identified).toEqual({ speakerIds: new Map(), voiceprints: [] });
     });
 
     it('takes a voiceprint of a long voice after a short one as B, and gives the short one the id left', () => {
@@ -34,9 +34,9 @@ describe('identifySpeakers with one voiceprint slot', () => {
             [],
             1,
         );
-        expect(Object.fromEntries(identified.speakerIdsByLabel)).toEqual({ A: 'A', B: 'B' });
-        expect(identified.voiceprints).toEqual([{ speakerId: 'B', audioSamples: cutClip(1, 4) }]);
-        expect(identified.voiceprints[0]!.audioSamples.buffer).not.toBe(clip.buffer);
+        expect(Object.fromEntries(identified.speakerIds)).toEqual({ A: 'A', B: 'B' });
+        expect(identified.voiceprints).toEqual([{ speakerId: 'B', samples: cutClip(1, 4) }]);
+        expect(identified.voiceprints[0]!.samples.buffer).not.toBe(clip.buffer);
     });
 
     it('keeps an id for a new voiceprint when short voices before it use up the ids', () => {
@@ -50,7 +50,7 @@ describe('identifySpeakers with one voiceprint slot', () => {
             [],
             1,
         );
-        expect(Object.fromEntries(identified.speakerIdsByLabel)).toEqual({ A: 'A', B: 'A', C: 'B' });
+        expect(Object.fromEntries(identified.speakerIds)).toEqual({ A: 'A', B: 'A', C: 'B' });
     });
 
     it("gives the voiceprint's voice its id and every other voice the id left", () => {
@@ -58,30 +58,30 @@ describe('identifySpeakers with one voiceprint slot', () => {
             clip,
             [
                 { speaker: 'A', start: 0, end: 1, text: 'Hi.' },
-                { speaker: getVoiceprintName('B'), start: 1, end: 2, text: 'Hello.' },
+                { speaker: getVoiceprintLabel('B'), start: 1, end: 2, text: 'Hello.' },
                 { speaker: 'C', start: 2, end: 3, text: 'Me too.' },
             ],
-            [{ speakerId: 'B', audioSamples: buildClip(3) }],
+            [{ speakerId: 'B', samples: buildClip(3) }],
             1,
         );
-        expect(Object.fromEntries(identified.speakerIdsByLabel)).toEqual({
+        expect(Object.fromEntries(identified.speakerIds)).toEqual({
             A: 'A',
-            [getVoiceprintName('B')]: 'B',
+            [getVoiceprintLabel('B')]: 'B',
             C: 'A',
         });
     });
 
     it('lengthens a voiceprint only with a longer cut of its voice, up to 5 s', () => {
-        const voiceprint = { speakerId: 'A', audioSamples: buildClip(4) };
+        const voiceprint = { speakerId: 'A', samples: buildClip(4) };
         const getVoiceprintsAfter = (end: number) =>
             identifySpeakers(
                 clip,
-                [{ speaker: getVoiceprintName('A'), start: 0, end, text: 'Words.' }],
+                [{ speaker: getVoiceprintLabel('A'), start: 0, end, text: 'Words.' }],
                 [voiceprint],
                 1,
             ).voiceprints;
         expect(getVoiceprintsAfter(3)).toEqual([voiceprint]);
-        expect(getVoiceprintsAfter(9)).toEqual([{ speakerId: 'A', audioSamples: cutClip(0, 5) }]);
+        expect(getVoiceprintsAfter(9)).toEqual([{ speakerId: 'A', samples: cutClip(0, 5) }]);
     });
 
     it('never takes a voiceprint from a segment without words', () => {
@@ -94,8 +94,8 @@ describe('identifySpeakers with one voiceprint slot', () => {
             [],
             1,
         );
-        expect(Object.fromEntries(identified.speakerIdsByLabel)).toEqual({ B: 'A' });
-        expect(identified.voiceprints).toEqual([{ speakerId: 'A', audioSamples: cutClip(3, 6) }]);
+        expect(Object.fromEntries(identified.speakerIds)).toEqual({ B: 'A' });
+        expect(identified.voiceprints).toEqual([{ speakerId: 'A', samples: cutClip(3, 6) }]);
     });
 });
 
@@ -111,7 +111,7 @@ describe('identifySpeakers with two voiceprint slots', () => {
             [],
             2,
         );
-        expect(Object.fromEntries(identified.speakerIdsByLabel)).toEqual({ A: 'A', B: 'B', C: 'C' });
+        expect(Object.fromEntries(identified.speakerIds)).toEqual({ A: 'A', B: 'B', C: 'C' });
         expect(identified.voiceprints.map((voiceprint) => voiceprint.speakerId)).toEqual(['B', 'C']);
     });
 
@@ -119,47 +119,47 @@ describe('identifySpeakers with two voiceprint slots', () => {
         const identified = identifySpeakers(
             clip,
             [
-                { speaker: getVoiceprintName('A'), start: 0, end: 1, text: 'Hello.' },
+                { speaker: getVoiceprintLabel('A'), start: 0, end: 1, text: 'Hello.' },
                 { speaker: 'A', start: 1, end: 1.5, text: 'Hi.' },
             ],
-            [{ speakerId: 'A', audioSamples: buildClip(3) }],
+            [{ speakerId: 'A', samples: buildClip(3) }],
             2,
         );
-        expect(Object.fromEntries(identified.speakerIdsByLabel)).toEqual({ [getVoiceprintName('A')]: 'A' });
+        expect(Object.fromEntries(identified.speakerIds)).toEqual({ [getVoiceprintLabel('A')]: 'A' });
     });
 
     it('gives every voice besides the two with voiceprints C', () => {
         const identified = identifySpeakers(
             clip,
             [
-                { speaker: getVoiceprintName('A'), start: 0, end: 1, text: 'Hello.' },
-                { speaker: getVoiceprintName('B'), start: 1, end: 2, text: 'Hi.' },
+                { speaker: getVoiceprintLabel('A'), start: 0, end: 1, text: 'Hello.' },
+                { speaker: getVoiceprintLabel('B'), start: 1, end: 2, text: 'Hi.' },
                 { speaker: 'A', start: 2, end: 3, text: 'Me too.' },
             ],
             [
-                { speakerId: 'A', audioSamples: buildClip(3) },
-                { speakerId: 'B', audioSamples: buildClip(3) },
+                { speakerId: 'A', samples: buildClip(3) },
+                { speakerId: 'B', samples: buildClip(3) },
             ],
             2,
         );
-        expect(Object.fromEntries(identified.speakerIdsByLabel)).toEqual({
-            [getVoiceprintName('A')]: 'A',
-            [getVoiceprintName('B')]: 'B',
+        expect(Object.fromEntries(identified.speakerIds)).toEqual({
+            [getVoiceprintLabel('A')]: 'A',
+            [getVoiceprintLabel('B')]: 'B',
             A: 'C',
         });
     });
 });
 
 describe('validateKnownVoiceprints', () => {
-    const voiceprintOf = (speakerId: string) => ({ speakerId, audioSamples: buildClip(3) });
+    const voiceprintOf = (speakerId: string) => ({ speakerId, samples: buildClip(3) });
 
-    it('accepts known voiceprints with their own letters among the visit ids', () => {
+    it('accepts known voiceprints with their own speaker ids among the visit ids', () => {
         expect(() => validateKnownVoiceprints([voiceprintOf('A')], 1)).not.toThrow();
         expect(() => validateKnownVoiceprints([voiceprintOf('B')], 1)).not.toThrow();
         expect(() => validateKnownVoiceprints([voiceprintOf('A'), voiceprintOf('C')], 2)).not.toThrow();
     });
 
-    it('rejects an id outside the visit letters, a repeated letter, or more voiceprints than slots', () => {
+    it('rejects an id outside the visit ids, a repeated id, or more voiceprints than slots', () => {
         expect(() => validateKnownVoiceprints([voiceprintOf('provider')], 1)).toThrow();
         expect(() => validateKnownVoiceprints([voiceprintOf('C')], 1)).toThrow();
         expect(() => validateKnownVoiceprints([voiceprintOf('A'), voiceprintOf('A')], 2)).toThrow();

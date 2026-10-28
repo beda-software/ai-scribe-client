@@ -1,7 +1,7 @@
 import { failure, RemoteDataResult } from '@beda.software/remote-data';
 
 import { buildWav } from './audio.js';
-import type { KnownSpeaker } from './diarization.js';
+import type { KnownVoiceprint } from './diarization.js';
 import type { Service } from '../types.js';
 import type { DiarizedTranscript } from './types.js';
 
@@ -15,12 +15,12 @@ export type AttachWav = (form: FormData, field: string, wav: Uint8Array) => (() 
 export async function diarizeClip(
     service: Service,
     clip: Int16Array,
-    knownSpeakers: KnownSpeaker[],
+    knownVoiceprints: KnownVoiceprint[],
     attachWav: AttachWav,
 ): Promise<RemoteDataResult<DiarizedTranscript>> {
     let release = (): void => undefined;
     try {
-        const built = buildDiarizeForm(clip, knownSpeakers, attachWav);
+        const built = buildDiarizeForm(clip, knownVoiceprints, attachWav);
         release = built.release;
         return await service<DiarizedTranscript>({
             method: 'POST',
@@ -39,13 +39,13 @@ export async function diarizeClip(
 
 export function buildDiarizeForm(
     clip: Int16Array,
-    knownSpeakers: KnownSpeaker[],
+    knownVoiceprints: KnownVoiceprint[],
     attachWav: AttachWav,
 ): { form: FormData; release: () => void } {
     const form = new FormData();
     const releases: Array<() => void> = [];
-    const attach = (field: string, audioSamples: Int16Array): void => {
-        const release = attachWav(form, field, buildWav(audioSamples));
+    const attach = (field: string, samples: Int16Array): void => {
+        const release = attachWav(form, field, buildWav(samples));
         if (release) {
             releases.push(release);
         }
@@ -54,9 +54,9 @@ export function buildDiarizeForm(
     const release = (): void => releases.forEach((releaseWav) => releaseWav());
     try {
         attach('file', clip);
-        knownSpeakers.forEach(({ name, audioSamples }) => {
-            form.append('speaker', name);
-            attach('sample', audioSamples);
+        knownVoiceprints.forEach(({ label, samples }) => {
+            form.append('speaker', label);
+            attach('sample', samples);
         });
     } catch (error) {
         release();

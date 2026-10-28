@@ -10,7 +10,7 @@ import {
     DiarizationOutcome,
     dropUntranscribedMessages,
     getDiarizationOutcome,
-    splitPhraseAudio,
+    splitPhraseClip,
     insertMessage,
     isPhrasePart,
     markMessageTranscribing,
@@ -18,14 +18,14 @@ import {
     removePhrase,
     TranscriptMessage,
 } from './transcript.js';
-import type { DiarizedTranscript, TranscribeSegment } from './types.js';
+import type { DiarizedTranscript, TranscriptSegment } from './types.js';
 
 const speakerIds = new Map([
     ['A', 'A'],
     ['B', 'B'],
 ]);
 
-const buildTranscript = (segments: TranscribeSegment[]): DiarizedTranscript => ({
+const buildTranscript = (segments: TranscriptSegment[]): DiarizedTranscript => ({
     text: segments.map((segment) => segment.text).join(' '),
     segments,
     llmStats: [],
@@ -44,7 +44,7 @@ const buildMessage = (id: string, spokenAt: number): TranscriptMessage => ({
 });
 
 describe('createMessage', () => {
-    it('keys the message by its realtime item and stamps now when the spoken time is unknown', () => {
+    it('keys the message by its phrase and stamps now when the spoken time is unknown', () => {
         const before = Date.now();
         const unknownTime = createMessage('item_1', 'Hi.', 'raw', undefined);
         expect(unknownTime.id).toBe('item_1');
@@ -185,7 +185,13 @@ describe('getDiarizationOutcome', () => {
             segments: [
                 { message: { id: 'message-1-0', text: 'Hi.', spokenAt: 1_000_000, status: 'raw' }, segment: hi },
                 {
-                    message: { id: 'message-1-1', text: 'Bye.', spokenAt: 1_001_000, status: 'diarized', speakerId: 'B' },
+                    message: {
+                        id: 'message-1-1',
+                        text: 'Bye.',
+                        spokenAt: 1_001_000,
+                        status: 'diarized',
+                        speakerId: 'B',
+                    },
                     segment: bye,
                 },
             ],
@@ -237,27 +243,29 @@ describe('applyDiarization', () => {
     });
 });
 
-describe('splitPhraseAudio', () => {
-    const phrase = new Int16Array(convertMsToSamples(5000));
+describe('splitPhraseClip', () => {
+    const clip = new Int16Array(convertMsToSamples(5000));
     const buildSegmentMessage = (
         id: string,
         start: number,
         end: number,
-    ): { message: TranscriptMessage; segment: TranscribeSegment } => ({
+    ): { message: TranscriptMessage; segment: TranscriptSegment } => ({
         message: buildMessage(id, 0),
         segment: { speaker: 'A', start, end, text: id },
     });
 
-    it("cuts each message's segment plus an 800 ms tail, stopping at the phrase end and skipping an empty cut", () => {
-        const audio = splitPhraseAudio(phrase, [
+    it("cuts each message's segment plus an 800 ms tail, stopping at the clip end and skipping an empty cut", () => {
+        const clips = splitPhraseClip(clip, [
             buildSegmentMessage('hi', 1, 2),
             buildSegmentMessage('bye', 4, 5),
             buildSegmentMessage('past', 6, 7),
         ]);
-        const getStart = (samples: Int16Array): number => samples.byteOffset / Int16Array.BYTES_PER_ELEMENT;
-        expect(audio.map(([messageId, samples]) => [messageId, getStart(samples), samples.length])).toEqual([
-            ['hi', convertMsToSamples(1000), convertMsToSamples(1800)],
-            ['bye', convertMsToSamples(4000), convertMsToSamples(1000)],
-        ]);
+        const getStart = (segmentClip: Int16Array): number => segmentClip.byteOffset / Int16Array.BYTES_PER_ELEMENT;
+        expect(clips.map(([messageId, segmentClip]) => [messageId, getStart(segmentClip), segmentClip.length])).toEqual(
+            [
+                ['hi', convertMsToSamples(1000), convertMsToSamples(1800)],
+                ['bye', convertMsToSamples(4000), convertMsToSamples(1000)],
+            ],
+        );
     });
 });
