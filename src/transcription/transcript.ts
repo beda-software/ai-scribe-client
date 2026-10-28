@@ -98,16 +98,18 @@ function buildDiarizedSegments(
     segments: TranscribeSegment[],
     speakerIds: ReadonlyMap<string, string>,
 ): DiarizedSegment[] {
-    return segments.map((segment, index) => ({
-        message: {
+    return segments.map((segment, index): DiarizedSegment => {
+        const row = {
             id: `${message.id}-${index}`,
             text: segment.text.trim(),
             spokenAt: message.spokenAt + segment.start * 1000,
-            status: 'diarized',
-            speakerId: speakerIds.get(segment.speaker)!,
-        },
-        segment,
-    }));
+        };
+        const speakerId = speakerIds.get(segment.speaker);
+        return {
+            message: speakerId ? { ...row, status: 'diarized', speakerId } : { ...row, status: 'raw' },
+            segment,
+        };
+    });
 }
 
 export function applyDiarization(

@@ -1,76 +1,143 @@
 import { describe, expect, it } from 'vite-plus/test';
 import { convertMsToSamples } from './audio.js';
-import { assignSpeakerIds, getSampleName, updateSpeakerSamples } from './speakers.js';
+import { getSampleName, identifySpeakers } from './speakers.js';
 
 const buildClip = (seconds: number): Int16Array =>
     Int16Array.from({ length: convertMsToSamples(seconds * 1000) }, (_, i) => i);
 
-describe('assignSpeakerIds', () => {
-    it('takes the earliest voice as A before a sample exists, and every other voice as B', () => {
-        const speakerIds = assignSpeakerIds(
+const clip = buildClip(10);
+
+const cutClip = (start: number, end: number): Int16Array =>
+    clip.slice(convertMsToSamples(start * 1000), convertMsToSamples(end * 1000));
+
+describe('identifySpeakers with one sampled speaker', () => {
+    it('gives no voice an id while none is long enough to sample', () => {
+        const identified = identifySpeakers(
+            clip,
             [
-                { speaker: 'B', start: 1, end: 2, text: 'Fine.' },
-                { speaker: 'A', start: 0, end: 1, text: 'Hi.' },
-                { speaker: 'C', start: 2, end: 3, text: 'Me too.' },
+                { speaker: 'A', start: 0, end: 0.8, text: 'Hello.' },
+                { speaker: 'B', start: 1, end: 1.9, text: 'Hello.' },
             ],
             [],
+            1,
         );
-        expect(Object.fromEntries(speakerIds)).toEqual({ A: 'A', B: 'B', C: 'B' });
+        expect(identified).toEqual({ speakerIdsByLabel: new Map(), speakerSamples: [] });
     });
 
-    it("keeps a sampled voice's id and moves the diarizer's own letters to B", () => {
-        const speakerIds = assignSpeakerIds(
+    it('samples a long voice after a short one as B, and gives the short one the id left', () => {
+        const identified = identifySpeakers(
+            clip,
+            [
+                { speaker: 'A', start: 0, end: 0.8, text: 'Hello, doctor.' },
+                { speaker: 'B', start: 1, end: 4, text: 'Hello, how are you feeling?' },
+            ],
+            [],
+            1,
+        );
+        expect(Object.fromEntries(identified.speakerIdsByLabel)).toEqual({ A: 'A', B: 'B' });
+        expect(identified.speakerSamples).toEqual([{ speakerId: 'B', samples: cutClip(1, 4) }]);
+        expect(identified.speakerSamples[0]!.samples.buffer).not.toBe(clip.buffer);
+    });
+
+    it('keeps the id for a sampled voice when short voices before it use up the ids', () => {
+        const identified = identifySpeakers(
+            clip,
+            [
+                { speaker: 'A', start: 0, end: 0.5, text: 'Hi.' },
+                { speaker: 'B', start: 0.5, end: 1, text: 'Hi.' },
+                { speaker: 'C', start: 1, end: 4, text: 'Good morning, everyone.' },
+            ],
+            [],
+            1,
+        );
+        expect(Object.fromEntries(identified.speakerIdsByLabel)).toEqual({ A: 'A', B: 'A', C: 'B' });
+    });
+
+    it('gives the sampled voice its id and every other voice the id left', () => {
+        const identified = identifySpeakers(
+            clip,
             [
                 { speaker: 'A', start: 0, end: 1, text: 'Hi.' },
-                { speaker: getSampleName('A'), start: 1, end: 2, text: 'Hello.' },
+                { speaker: getSampleName('B'), start: 1, end: 2, text: 'Hello.' },
+                { speaker: 'C', start: 2, end: 3, text: 'Me too.' },
             ],
-            [{ speakerId: 'A', samples: buildClip(3) }],
+            [{ speakerId: 'B', samples: buildClip(3) }],
+            1,
         );
-        expect(Object.fromEntries(speakerIds)).toEqual({ A: 'B', [getSampleName('A')]: 'A' });
+        expect(Object.fromEntries(identified.speakerIdsByLabel)).toEqual({ A: 'A', [getSampleName('B')]: 'B', C: 'A' });
+    });
+
+    it('lengthens a sample only with a longer cut of its voice, up to 5 s', () => {
+        const sample = { speakerId: 'A', samples: buildClip(4) };
+        const getSamplesAfter = (end: number) =>
+            identifySpeakers(clip, [{ speaker: getSampleName('A'), start: 0, end, text: 'Words.' }], [sample], 1)
+                .speakerSamples;
+        expect(getSamplesAfter(3)).toEqual([sample]);
+        expect(getSamplesAfter(9)).toEqual([{ speakerId: 'A', samples: cutClip(0, 5) }]);
+    });
+
+    it('never samples a segment without words', () => {
+        const identified = identifySpeakers(
+            clip,
+            [
+                { speaker: 'A', start: 0, end: 3, text: ' ' },
+                { speaker: 'B', start: 3, end: 6, text: 'Hello, how are you feeling?' },
+            ],
+            [],
+            1,
+        );
+        expect(Object.fromEntries(identified.speakerIdsByLabel)).toEqual({ B: 'A' });
+        expect(identified.speakerSamples).toEqual([{ speakerId: 'A', samples: cutClip(3, 6) }]);
     });
 });
 
-describe('updateSpeakerSamples', () => {
-    const clip = buildClip(10);
-    const speakerIds = new Map([
-        ['A', 'A'],
-        ['B', 'B'],
-    ]);
-
-    it("cuts a sampled speaker's longest segment to 5 s, and none for a speaker past the limit", () => {
-        const samples = updateSpeakerSamples(
-            [],
+describe('identifySpeakers with two sampled speakers', () => {
+    it('samples two long voices in speaking order, and gives a short one before them the id left', () => {
+        const identified = identifySpeakers(
             clip,
             [
-                { speaker: 'A', start: 0, end: 2.5, text: 'Short.' },
-                { speaker: 'B', start: 2.5, end: 9, text: 'Not sampled.' },
-                { speaker: 'A', start: 3, end: 10, text: 'Long.' },
+                { speaker: 'A', start: 0, end: 0.5, text: 'Hi.' },
+                { speaker: 'B', start: 0.5, end: 3, text: 'Good morning, doctor.' },
+                { speaker: 'C', start: 3, end: 6, text: 'Good morning, how is she?' },
             ],
-            speakerIds,
-        );
-        expect(samples).toEqual([
-            { speakerId: 'A', samples: clip.slice(convertMsToSamples(3000), convertMsToSamples(8000)) },
-        ]);
-        expect(samples[0]!.samples.buffer).not.toBe(clip.buffer);
-    });
-
-    it('skips a segment under 2 s', () => {
-        expect(updateSpeakerSamples([], clip, [{ speaker: 'A', start: 0, end: 1.9, text: 'Hi.' }], speakerIds)).toEqual(
             [],
+            2,
         );
+        expect(Object.fromEntries(identified.speakerIdsByLabel)).toEqual({ A: 'A', B: 'B', C: 'C' });
+        expect(identified.speakerSamples.map((sample) => sample.speakerId)).toEqual(['B', 'C']);
     });
 
-    it('replaces a sample only with a longer one, so a 5 s sample is final', () => {
-        const segments = [{ speaker: 'A', start: 0, end: 4, text: 'Four seconds.' }];
-        const threeSeconds = { speakerId: 'A', samples: buildClip(3) };
-        const fourSeconds = { speakerId: 'A', samples: buildClip(4) };
-        const fiveSeconds = { speakerId: 'A', samples: buildClip(5) };
-        expect(updateSpeakerSamples([threeSeconds], clip, segments, speakerIds)[0]!.samples).toHaveLength(
-            convertMsToSamples(4000),
+    it('gives a short new voice no id while a sample slot is free', () => {
+        const identified = identifySpeakers(
+            clip,
+            [
+                { speaker: getSampleName('A'), start: 0, end: 1, text: 'Hello.' },
+                { speaker: 'A', start: 1, end: 1.5, text: 'Hi.' },
+            ],
+            [{ speakerId: 'A', samples: buildClip(3) }],
+            2,
         );
-        expect(updateSpeakerSamples([fourSeconds], clip, segments, speakerIds)).toEqual([fourSeconds]);
-        expect(
-            updateSpeakerSamples([fiveSeconds], clip, [{ speaker: 'A', start: 0, end: 9, text: 'Long.' }], speakerIds),
-        ).toEqual([fiveSeconds]);
+        expect(Object.fromEntries(identified.speakerIdsByLabel)).toEqual({ [getSampleName('A')]: 'A' });
+    });
+
+    it('gives every voice besides the two sampled ones C', () => {
+        const identified = identifySpeakers(
+            clip,
+            [
+                { speaker: getSampleName('A'), start: 0, end: 1, text: 'Hello.' },
+                { speaker: getSampleName('B'), start: 1, end: 2, text: 'Hi.' },
+                { speaker: 'A', start: 2, end: 3, text: 'Me too.' },
+            ],
+            [
+                { speakerId: 'A', samples: buildClip(3) },
+                { speakerId: 'B', samples: buildClip(3) },
+            ],
+            2,
+        );
+        expect(Object.fromEntries(identified.speakerIdsByLabel)).toEqual({
+            [getSampleName('A')]: 'A',
+            [getSampleName('B')]: 'B',
+            A: 'C',
+        });
     });
 });

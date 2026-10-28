@@ -1,12 +1,6 @@
 import { failure, isSuccess, RemoteDataResult, success } from '@beda.software/remote-data';
 
-import {
-    assignSpeakerIds,
-    getSampleName,
-    MAX_SAMPLED_SPEAKERS,
-    SpeakerSample,
-    updateSpeakerSamples,
-} from './speakers.js';
+import { getSampleName, IdentifiedSpeakers, identifySpeakers, SpeakerSample } from './speakers.js';
 import type { DiarizedTranscript } from './types.js';
 
 export interface KnownSpeaker {
@@ -21,13 +15,14 @@ export type FetchDiarization = (
 
 export interface DiarizationResult {
     transcript: DiarizedTranscript;
-    // Each diarizer label → the speaker's id in this visit.
-    speakerIds: ReadonlyMap<string, string>;
+    speakerIds: IdentifiedSpeakers['speakerIdsByLabel'];
 }
 
 export interface DiarizerOptions {
     /** Kept for the whole visit: a longer phrase by the same voice never replaces them. */
     knownSamples?: SpeakerSample[];
+    /** The diarizer accepts up to 4; each sample adds input tokens to every call. */
+    maxSampledSpeakers?: number;
 }
 
 export interface Diarizer {
@@ -38,7 +33,7 @@ export interface Diarizer {
 
 /** Runs calls one at a time until every sample slot is taken, then in parallel: parallel calls could give one new voice two ids. */
 export function createDiarizer(fetchDiarization: FetchDiarization, options: DiarizerOptions = {}): Diarizer {
-    const knownSamples = options.knownSamples ?? [];
+    const { knownSamples = [], maxSampledSpeakers = 1 } = options;
     let samples: SpeakerSample[] = knownSamples;
     let queue: Promise<unknown> = Promise.resolve();
     let dropped = false;
@@ -57,16 +52,16 @@ export function createDiarizer(fetchDiarization: FetchDiarization, options: Diar
             return response;
         }
 
-        const speakerIds = assignSpeakerIds(response.data.segments, sentSamples);
-        samples = updateSpeakerSamples(samples, clip, response.data.segments, speakerIds).map(
+        const identified = identifySpeakers(clip, response.data.segments, sentSamples, maxSampledSpeakers);
+        samples = identified.speakerSamples.map(
             (sample) => knownSamples.find((known) => known.speakerId === sample.speakerId) ?? sample,
         );
-        return success({ transcript: response.data, speakerIds });
+        return success({ transcript: response.data, speakerIds: identified.speakerIdsByLabel });
     };
 
     return {
         diarize: (clip) => {
-            if (samples.length >= MAX_SAMPLED_SPEAKERS) {
+            if (samples.length >= maxSampledSpeakers) {
                 return diarizeNow(clip);
             }
 

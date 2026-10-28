@@ -1,18 +1,25 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { isSuccess, success } from '@beda.software/remote-data';
+import { isSuccess, RemoteDataResult, success } from '@beda.software/remote-data';
 
 import { convertMsToSamples } from './audio.js';
-import { createDiarizer, FetchDiarization, KnownSpeaker } from './diarization.js';
+import { createDiarizer, DiarizationResult, FetchDiarization, KnownSpeaker } from './diarization.js';
 import { getSampleName } from './speakers.js';
 import type { DiarizedTranscript } from './types.js';
 
 const buildClip = (seconds: number): Int16Array => new Int16Array(convertMsToSamples(seconds * 1000));
 
-const buildTranscriptBy = (speaker: string, seconds: number): DiarizedTranscript => ({
-    text: 'Words.',
-    segments: [{ speaker, start: 0, end: seconds, text: 'Words.' }],
-    llmStats: [],
-});
+const buildTranscriptOfTurns = (...turns: Array<[speaker: string, seconds: number]>): DiarizedTranscript => {
+    let start = 0;
+    const segments = turns.map(([speaker, seconds]) => {
+        const segment = { speaker, start, end: start + seconds, text: 'Words.' };
+        start = segment.end;
+        return segment;
+    });
+    return { text: segments.map((segment) => segment.text).join(' '), segments, llmStats: [] };
+};
+
+const getSpeakerIds = (result: RemoteDataResult<DiarizationResult>): Record<string, string> | null =>
+    isSuccess(result) ? Object.fromEntries(result.data.speakerIds) : null;
 
 const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -23,8 +30,8 @@ describe('createDiarizer', () => {
         const fetchDiarization: FetchDiarization = (_clip, knownSpeakers) => {
             sentSpeakers.push(knownSpeakers);
             return sentSpeakers.length === 1
-                ? new Promise((resolve) => (answerFirst = () => resolve(success(buildTranscriptBy('A', 3)))))
-                : Promise.resolve(success(buildTranscriptBy(getSampleName('A'), 1)));
+                ? new Promise((resolve) => (answerFirst = () => resolve(success(buildTranscriptOfTurns(['A', 3])))))
+                : Promise.resolve(success(buildTranscriptOfTurns([getSampleName('A'), 1])));
         };
         const diarizer = createDiarizer(fetchDiarization);
 
@@ -45,7 +52,7 @@ describe('createDiarizer', () => {
         let callCount = 0;
         const fetchDiarization: FetchDiarization = () => {
             callCount += 1;
-            return callCount === 1 ? Promise.resolve(success(buildTranscriptBy('A', 3))) : new Promise(() => undefined);
+            return callCount === 1 ? Promise.resolve(success(buildTranscriptOfTurns(['A', 3]))) : new Promise(() => undefined);
         };
         const diarizer = createDiarizer(fetchDiarization);
         await diarizer.diarize(buildClip(3));
@@ -60,7 +67,7 @@ describe('createDiarizer', () => {
         const sentSpeakers: KnownSpeaker[][] = [];
         const fetchDiarization: FetchDiarization = (_clip, knownSpeakers) => {
             sentSpeakers.push(knownSpeakers);
-            return Promise.resolve(success(buildTranscriptBy(getSampleName('A'), 5)));
+            return Promise.resolve(success(buildTranscriptOfTurns([getSampleName('A'), 5])));
         };
         const knownSample = buildClip(1);
         const diarizer = createDiarizer(fetchDiarization, { knownSamples: [{ speakerId: 'A', samples: knownSample }] });
@@ -74,7 +81,7 @@ describe('createDiarizer', () => {
         expect(sentSpeakers).toEqual(Array(3).fill([{ name: getSampleName('A'), samples: knownSample }]));
     });
 
-    it('gives every voice besides a known sample the next id', async () => {
+    it('gives every voice besides a known sample the other id', async () => {
         const fetchDiarization: FetchDiarization = () =>
             Promise.resolve(
                 success({
@@ -99,6 +106,38 @@ describe('createDiarizer', () => {
         });
     });
 
+    it('gives no voice an id until one leaves a sample', async () => {
+        const sentSpeakers: KnownSpeaker[][] = [];
+        const fetchDiarization: FetchDiarization = (_clip, knownSpeakers) => {
+            sentSpeakers.push(knownSpeakers);
+            return Promise.resolve(success(buildTranscriptOfTurns(['A', 1])));
+        };
+        const diarizer = createDiarizer(fetchDiarization);
+
+        expect(getSpeakerIds(await diarizer.diarize(buildClip(1)))).toEqual({});
+        await diarizer.diarize(buildClip(1));
+        expect(sentSpeakers).toEqual([[], []]);
+    });
+
+    it('gives two short voices no id while neither leaves a sample', async () => {
+        const diarizer = createDiarizer(() => Promise.resolve(success(buildTranscriptOfTurns(['A', 1], ['B', 1]))));
+
+        expect(getSpeakerIds(await diarizer.diarize(buildClip(2)))).toEqual({});
+    });
+
+    it('gives a short first voice A and samples the long voice after it as B', async () => {
+        const sentSpeakers: KnownSpeaker[][] = [];
+        const fetchDiarization: FetchDiarization = (_clip, knownSpeakers) => {
+            sentSpeakers.push(knownSpeakers);
+            return Promise.resolve(success(buildTranscriptOfTurns(['A', 1], ['B', 3])));
+        };
+        const diarizer = createDiarizer(fetchDiarization);
+
+        expect(getSpeakerIds(await diarizer.diarize(buildClip(4)))).toEqual({ A: 'A', B: 'B' });
+        await diarizer.diarize(buildClip(4));
+        expect(sentSpeakers[1]).toEqual([{ name: getSampleName('B'), samples: buildClip(3) }]);
+    });
+
     it('resolves a fetch that throws as a failure', async () => {
         const result = await createDiarizer(() => Promise.reject(new Error('offline'))).diarize(buildClip(1));
         expect(result.status).toBe('Failure');
@@ -109,7 +148,7 @@ describe('createDiarizer', () => {
         let answerFirst!: () => void;
         const fetchDiarization: FetchDiarization = () => {
             callCount += 1;
-            return new Promise((resolve) => (answerFirst = () => resolve(success(buildTranscriptBy('A', 1)))));
+            return new Promise((resolve) => (answerFirst = () => resolve(success(buildTranscriptOfTurns(['A', 1])))));
         };
         const diarizer = createDiarizer(fetchDiarization);
 

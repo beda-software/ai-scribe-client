@@ -173,6 +173,25 @@ describe('getDiarizationOutcome', () => {
         expect(outcome).toEqual({ type: 'raw' });
     });
 
+    it('makes a segment raw when its voice has no speaker id, and keeps the others diarized', () => {
+        const hi = { speaker: 'A', start: 0, end: 1, text: 'Hi.' };
+        const bye = { speaker: 'B', start: 1, end: 4, text: 'Bye.' };
+        const outcome = getDiarizationOutcome(
+            processingRow,
+            buildResult(buildTranscript([hi, bye]), new Map([['B', 'B']])),
+        );
+        expect(outcome).toEqual({
+            type: 'replace',
+            segments: [
+                { message: { id: 'message-1-0', text: 'Hi.', spokenAt: 1_000_000, status: 'raw' }, segment: hi },
+                {
+                    message: { id: 'message-1-1', text: 'Bye.', spokenAt: 1_001_000, status: 'diarized', speakerId: 'B' },
+                    segment: bye,
+                },
+            ],
+        });
+    });
+
     it('removes the message when no segment has words', () => {
         const outcome = getDiarizationOutcome(
             processingRow,
