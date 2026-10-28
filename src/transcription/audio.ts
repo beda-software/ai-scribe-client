@@ -104,11 +104,19 @@ export function dropChunksBefore(buffer: ChunkBuffer, ms: number): void {
 }
 
 export function getEndMs(buffer: ChunkBuffer): number {
-    return (buffer.endSample * 1000) / OUTPUT_SAMPLE_RATE;
+    return convertSamplesToMs(buffer.endSample);
 }
 
 export function convertMsToSamples(ms: number): number {
     return Math.round((ms * OUTPUT_SAMPLE_RATE) / 1000);
+}
+
+export function convertSamplesToMs(sampleCount: number): number {
+    return (sampleCount * 1000) / OUTPUT_SAMPLE_RATE;
+}
+
+export function convertSamplesToSeconds(sampleCount: number): number {
+    return sampleCount / OUTPUT_SAMPLE_RATE;
 }
 
 /** Clock time of a session-audio position; inside made-up silence it moves to where real audio resumes. */
@@ -121,7 +129,28 @@ export function getSpokenAt(buffer: ChunkBuffer, audioStartMs: number, now: numb
     }
 
     const samplesBeforeEnd = chunk.start + chunk.samples.length - Math.max(position, chunk.start);
-    return chunk.sentAt - (samplesBeforeEnd * 1000) / OUTPUT_SAMPLE_RATE;
+    return chunk.sentAt - convertSamplesToMs(samplesBeforeEnd);
+}
+
+/** Seconds from the start of a joined clip. */
+export interface ClipInterval {
+    start: number;
+    end: number;
+}
+
+export function joinClips(clips: Int16Array[], gapSeconds: number): { clip: Int16Array; intervals: ClipInterval[] } {
+    const gap = convertMsToSamples(gapSeconds * 1000);
+    const audioLength = clips.reduce((length, clip) => length + clip.length, 0);
+    const joined = new Int16Array(audioLength + gap * (clips.length - 1));
+    let offset = 0;
+    const intervals = clips.map((clip) => {
+        joined.set(clip, offset);
+        const interval = { start: convertSamplesToSeconds(offset), end: convertSamplesToSeconds(offset + clip.length) };
+        offset += clip.length + gap;
+        return interval;
+    });
+
+    return { clip: joined, intervals };
 }
 
 /** Wraps 24 kHz mono PCM16 samples in a 44-byte RIFF/WAVE header. */

@@ -15,18 +15,18 @@ Peer dependencies: `@beda.software/remote-data`, and optionally `axios` for the 
 
 `@beda.software/ai-scribe-client/transcription` (also re-exported from the package root).
 
-| Area                   | What it does                                                                                                                                                                                                                                   |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `connectRealtime`      | Opens an OpenAI Realtime transcription session over WebSocket with an ephemeral token, streams microphone chunks (`sendChunk`), emits every server event, and keeps each phrase's clip (`takeClip`) even when transcripts arrive out of order. |
-| `createDiarizer`       | Diarizes a visit's phrase clips against its voiceprints: one call at a time until all `maxVoiceprints` (1) slots hold a voiceprint, then in parallel. `knownVoiceprints` fill slots for the whole visit and must use the visit's speaker ids.  |
-| `diarizeClip`          | Sends a clip and the voiceprints to recognise (`KnownVoiceprint`) to the AI scribe service's `/v3/transcribe` with diarization; `llmStats` lists every model call.                                                                             |
-| Transcript messages    | `insertMessage`, `getDiarizationOutcome`, `applyDiarization`, `removePhrase`, `splitPhraseClip` and friends: functions that take a message list and return a new one, for any store.                                                           |
-| `buildWav`, `getLevel` | A WAV from a clip's 24 kHz PCM16 samples, and a chunk's level.                                                                                                                                                                                 |
-| `parseWav`             | The samples of a WAV in the format `buildWav` writes; throws on any other file.                                                                                                                                                                |
-| `cutSeconds`           | A view of a time range of 24 kHz samples.                                                                                                                                                                                                      |
-| `resampleTo24k`        | Linear-interpolation resample of one Float32 microphone chunk to 24 kHz.                                                                                                                                                                       |
-| `convertFloatToInt16`  | Float32 samples as PCM16.                                                                                                                                                                                                                      |
-| `checkVoiceprint`      | Checks a clip of a script read aloud and cuts the voiceprint from it, through any `FetchDiarization`. `MIN_VOICEPRINT_CLIP_SECONDS` and `MAX_VOICEPRINT_CLIP_SECONDS` bound the clip.                                                          |
+| Area                   | What it does                                                                                                                                                                                                                                                                                                                                                                          |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `connectRealtime`      | Opens an OpenAI Realtime transcription session over WebSocket with an ephemeral token, streams microphone chunks (`sendChunk`), emits every server event, and keeps each phrase's clip (`takeClip`) even when transcripts arrive out of order.                                                                                                                                        |
+| `createDiarizer`       | Diarizes a visit's phrase clips in batches sent `batchSeconds` (15; 0 for one call per phrase) after the earliest began, or on `flush()`; each phrase's promise resolves with its own part. Calls run one at a time until all `maxVoiceprints` (1) slots hold a voiceprint, then in parallel. `knownVoiceprints` fill slots for the whole visit and must use the visit's speaker ids. |
+| `diarizeClip`          | Sends a clip and the voiceprints to recognise (`KnownVoiceprint`) to the AI scribe service's `/v3/transcribe` with diarization; `llmStats` lists every model call.                                                                                                                                                                                                                    |
+| Transcript messages    | `insertMessage`, `getDiarizationOutcome`, `applyDiarization`, `removePhrase`, `splitPhraseClip` and friends: functions that take a message list and return a new one, for any store.                                                                                                                                                                                                  |
+| `buildWav`, `getLevel` | A WAV from a clip's 24 kHz PCM16 samples, and a chunk's level.                                                                                                                                                                                                                                                                                                                        |
+| `parseWav`             | The samples of a WAV in the format `buildWav` writes; throws on any other file.                                                                                                                                                                                                                                                                                                       |
+| `cutSeconds`           | A view of a time range of 24 kHz samples.                                                                                                                                                                                                                                                                                                                                             |
+| `resampleTo24k`        | Linear-interpolation resample of one Float32 microphone chunk to 24 kHz.                                                                                                                                                                                                                                                                                                              |
+| `convertFloatToInt16`  | Float32 samples as PCM16.                                                                                                                                                                                                                                                                                                                                                             |
+| `checkVoiceprint`      | Checks a clip of a script read aloud and cuts the voiceprint from it, through any `FetchDiarization`. `MIN_VOICEPRINT_CLIP_SECONDS` and `MAX_VOICEPRINT_CLIP_SECONDS` bound the clip.                                                                                                                                                                                                 |
 
 The app supplies what differs per platform and backend: the microphone, the ephemeral token request, an HTTP client
 bound to the AI scribe service's base URL (`service`, any `(axiosConfig) => Promise<RemoteDataResult>`), how a WAV is
@@ -34,7 +34,7 @@ attached to a form on React Native (`AttachWav`) and where messages are stored.
 
 ### Vocabulary
 
-- **samples**: raw audio data, 24 kHz PCM16 (`Int16Array`); the name of every field and parameter that holds audio;
+- **samples**: raw audio data, 24 kHz PCM16 (`Int16Array`); the name of every field that holds audio;
 - **chunk**: a piece of microphone audio streamed to the realtime server as it is recorded;
 - **clip**: a stretch of samples cut out for one purpose: a phrase's audio, what one diarization call sends, or a
   script read aloud for a voiceprint;
@@ -45,7 +45,8 @@ attached to a form on React Native (`AttachWav`) and where messages are stored.
 - **voiceprint**: a few seconds of one speaker's voice, sent with every diarization call so the diarizer recognises
   them across calls; checked from a clip read aloud (`checkVoiceprint`) or cut from the visit;
 - **speaker id**: a letter for the whole visit, `A`, `B`, …: one per voiceprint, and one shared by every other voice.
-  A voice that can't be told apart yet gets none, and its segment becomes a raw message.
+  A voice that can't be told apart yet gets none, and its segment becomes a raw message;
+- **batch**: phrase clips joined, with 1.2 s of silence between them, into one diarization call.
 
 ## Commands
 

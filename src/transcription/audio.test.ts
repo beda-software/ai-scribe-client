@@ -4,12 +4,14 @@ import {
     buildWav,
     ChunkBuffer,
     convertFloatToInt16,
+    convertMsToSamples,
     createChunkBuffer,
     cutClip,
     dropChunksBefore,
     encodeBase64,
     getEndMs,
     getLevel,
+    joinClips,
     getSpokenAt,
     parseWav,
     resampleTo24k,
@@ -173,5 +175,20 @@ describe('parseWav', () => {
         expect(() => parseWav(stereo)).toThrow();
         expect(() => parseWav(buildWav(Int16Array.from([1, 2])).subarray(0, 46))).toThrow();
         expect(() => parseWav(new Uint8Array(10))).toThrow();
+    });
+});
+
+describe('joinClips', () => {
+    it('joins the clips with the gap of silence between them and returns where each one lies', () => {
+        const first = new Int16Array(convertMsToSamples(1000)).fill(1);
+        const second = new Int16Array(convertMsToSamples(2000)).fill(2);
+
+        const { clip, intervals } = joinClips([first, second], 1.2);
+        expect(clip).toHaveLength(convertMsToSamples(4200));
+        expect(intervals).toEqual([
+            { start: 0, end: 1 },
+            { start: 2.2, end: 4.2 },
+        ]);
+        expect([clip[0], clip[convertMsToSamples(1500)], clip[convertMsToSamples(3000)]]).toEqual([1, 0, 2]);
     });
 });
