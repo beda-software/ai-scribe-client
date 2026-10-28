@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test';
 import { convertMsToSamples } from './audio.js';
-import { getVoiceprintName, identifySpeakers } from './speakers.js';
+import { getVoiceprintName, identifySpeakers, validateKnownVoiceprints } from './speakers.js';
 
 const buildClip = (seconds: number): Int16Array =>
     Int16Array.from({ length: convertMsToSamples(seconds * 1000) }, (_, i) => i);
@@ -147,5 +147,22 @@ describe('identifySpeakers with two voiceprint slots', () => {
             [getVoiceprintName('B')]: 'B',
             A: 'C',
         });
+    });
+});
+
+describe('validateKnownVoiceprints', () => {
+    const voiceprintOf = (speakerId: string) => ({ speakerId, audioSamples: buildClip(3) });
+
+    it('accepts known voiceprints with their own letters among the visit ids', () => {
+        expect(() => validateKnownVoiceprints([voiceprintOf('A')], 1)).not.toThrow();
+        expect(() => validateKnownVoiceprints([voiceprintOf('B')], 1)).not.toThrow();
+        expect(() => validateKnownVoiceprints([voiceprintOf('A'), voiceprintOf('C')], 2)).not.toThrow();
+    });
+
+    it('rejects an id outside the visit letters, a repeated letter, or more voiceprints than slots', () => {
+        expect(() => validateKnownVoiceprints([voiceprintOf('provider')], 1)).toThrow();
+        expect(() => validateKnownVoiceprints([voiceprintOf('C')], 1)).toThrow();
+        expect(() => validateKnownVoiceprints([voiceprintOf('A'), voiceprintOf('A')], 2)).toThrow();
+        expect(() => validateKnownVoiceprints([voiceprintOf('A'), voiceprintOf('B')], 1)).toThrow();
     });
 });

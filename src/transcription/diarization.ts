@@ -1,6 +1,12 @@
 import { failure, isSuccess, RemoteDataResult, success } from '@beda.software/remote-data';
 
-import { getVoiceprintName, IdentifiedSpeakers, identifySpeakers, Voiceprint } from './speakers.js';
+import {
+    getVoiceprintName,
+    IdentifiedSpeakers,
+    identifySpeakers,
+    validateKnownVoiceprints,
+    Voiceprint,
+} from './speakers.js';
 import type { DiarizedTranscript } from './types.js';
 
 export interface KnownSpeaker {
@@ -19,7 +25,7 @@ export interface DiarizationResult {
 }
 
 export interface DiarizerOptions {
-    /** Kept for the whole visit: a longer phrase by the same voice never replaces them. */
+    /** Kept for the whole visit; each has its own letter among the first `maxVoiceprints + 1`, or the diarizer throws. */
     knownVoiceprints?: Voiceprint[];
     /** The diarizer accepts up to 4; each voiceprint adds input tokens to every call. */
     maxVoiceprints?: number;
@@ -34,6 +40,7 @@ export interface Diarizer {
 /** Runs calls one at a time until every voiceprint slot is taken, then in parallel: parallel calls could give one new voice two ids. */
 export function createDiarizer(fetchDiarization: FetchDiarization, options: DiarizerOptions = {}): Diarizer {
     const { knownVoiceprints = [], maxVoiceprints = 1 } = options;
+    validateKnownVoiceprints(knownVoiceprints, maxVoiceprints);
     let voiceprints: Voiceprint[] = knownVoiceprints;
     let queue: Promise<unknown> = Promise.resolve();
     let dropped = false;

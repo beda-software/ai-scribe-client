@@ -54,6 +54,22 @@ export function identifySpeakers(
     return { speakerIdsByLabel, voiceprints };
 }
 
+/** Throws unless the known voiceprints fit the slots, each with its own letter among the visit's ids. */
+export function validateKnownVoiceprints(knownVoiceprints: Voiceprint[], maxVoiceprints: number): void {
+    const ids = listSpeakerIds(maxVoiceprints);
+    const knownIds = knownVoiceprints.map((voiceprint) => voiceprint.speakerId);
+    const fits =
+        knownIds.length <= maxVoiceprints &&
+        new Set(knownIds).size === knownIds.length &&
+        knownIds.every((speakerId) => ids.includes(speakerId));
+    if (!fits) {
+        throw new Error(
+            `Known voiceprints need distinct speaker ids among ${ids.join(', ')}, at most ${maxVoiceprints}; ` +
+                `got ${knownIds.join(', ')}`,
+        );
+    }
+}
+
 /** One id per voice with a voiceprint, and one shared by every voice past them. */
 function listSpeakerIds(maxVoiceprints: number): SpeakerId[] {
     return Array.from({ length: maxVoiceprints + 1 }, (_, index) => String.fromCharCode('A'.charCodeAt(0) + index));
