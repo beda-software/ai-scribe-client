@@ -52,15 +52,19 @@ type ParameterValue<Parameter> = Parameter extends { type: infer Type extends ke
 
 type DetectResponse<Commands extends readonly Command<CommandPayload>[]> = DetectedCommand<DetectedCommandOf<Commands>>;
 
-/** Asks the AI scribe which of `commands` the text says; `command` is null when it says none of them. */
+/**
+ * Asks the AI scribe which of `commands` the text says; `command` is null when it says none of them.
+ * `directed` tells it the speech is meant for the app, so only a text matching no command gets none.
+ */
 export function detectCommand<const Commands extends readonly Command<CommandPayload>[]>(
     service: Service,
     text: string,
     commands: Commands,
+    directed = false,
 ): Promise<RemoteDataResult<DetectResponse<Commands>>> {
     return service<DetectResponse<Commands>>({
         method: 'POST',
         url: '/v3/detect-command',
-        data: { text, commands },
+        data: { text, commands, directed },
     });
 }

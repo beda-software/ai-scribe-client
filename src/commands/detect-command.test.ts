@@ -36,10 +36,14 @@ describe('detectCommand', () => {
             return success(reply);
         }) as Service;
 
-        const response = await detectCommand(service, text, encounterCommands);
+        const response = await detectCommand(service, text, encounterCommands, true);
         expect(response).toEqual(success(reply));
         expect(requests).toEqual([
-            { method: 'POST', url: '/v3/detect-command', data: { text, commands: encounterCommands } },
+            {
+                method: 'POST',
+                url: '/v3/detect-command',
+                data: { text, commands: encounterCommands, directed: true },
+            },
         ]);
     });
 });
