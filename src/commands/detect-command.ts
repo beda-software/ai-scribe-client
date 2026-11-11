@@ -18,11 +18,13 @@ export interface Command<Payload extends CommandPayload> {
     description: string;
     parameters?: Record<string, CommandParameter>;
     payload: Payload;
+    /** Detected only when said on its own with at least this confidence (0–1); among several, it and those after it are dropped. */
+    minConfidence?: number;
 }
 
-export interface DetectedCommand<Detected> {
-    command: Detected | null;
-    confidence: number | null;
+export interface DetectedCommands<Detected> {
+    /** In the order said. */
+    commands: Detected[];
     llmStats: LlmStats[];
 }
 
@@ -50,10 +52,12 @@ type ParameterValue<Parameter> = Parameter extends { type: infer Type extends ke
     ? ParameterValues[Type]
     : never;
 
-type DetectResponse<Commands extends readonly Command<CommandPayload>[]> = DetectedCommand<DetectedCommandOf<Commands>>;
+type DetectResponse<Commands extends readonly Command<CommandPayload>[]> = DetectedCommands<
+    DetectedCommandOf<Commands>
+>;
 
 /**
- * Asks the AI scribe which of `commands` the text says; `command` is null when it says none of them.
+ * Asks the AI scribe which of `commands` the text says, in the order said.
  * `directed` tells it the speech is meant for the app, so only a text matching no command gets none.
  */
 export function detectCommand<const Commands extends readonly Command<CommandPayload>[]>(

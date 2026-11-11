@@ -52,12 +52,14 @@ attached to a form on React Native (`AttachWav`) and where messages are stored.
 
 `@beda.software/ai-scribe-client/commands` (also re-exported from the package root).
 
-| Area            | What it does                                                                                                                                                             |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `detectCommand` | Sends a text and the commands on offer to the AI scribe service's `/v3/detect-command`; returns the chosen command's payload merged with the said parameters, or `null`. |
+| Area            | What it does                                                                                                                                                                      |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `detectCommand` | Sends a text and the commands on offer to the AI scribe service's `/v3/detect-command`; returns the commands said, in order, each as its payload merged with the said parameters. |
 
 A command's `payload` is echoed back and never sent to the model, so it carries the `action` to run, which every payload
-needs; a parameter may not reuse a payload key. The app decides which commands to offer and runs the one returned.
+needs; a parameter may not reuse a payload key. The app decides which commands to offer and runs the ones returned, in
+order. A command with `minConfidence` is detected only when said on its own with at least that confidence; among several
+commands, it and the ones after it are dropped.
 `DetectedCommandOf` types the result per action from the commands' own `parameters`, as long as the list is kept
 `as const` or written inline: typing it `Command<...>[]` widens the parameters away.
 

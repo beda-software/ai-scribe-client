@@ -3,6 +3,6 @@ export type {
     Command,
     CommandParameter,
     CommandPayload,
-    DetectedCommand,
+    DetectedCommands,
     DetectedCommandOf,
 } from './detect-command.js';

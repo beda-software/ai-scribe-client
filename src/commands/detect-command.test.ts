@@ -20,12 +20,14 @@ const encounterCommands = [
 ] as const;
 
 describe('detectCommand', () => {
-    it('posts the text and commands to v3 and returns the merged payload with every llmStats entry', async () => {
+    it('posts the text and commands to v3 and returns the reply as given', async () => {
         const requests: AxiosRequestConfig[] = [];
-        const text = "show doctor House's encounters";
+        const text = "open the patient list and show doctor House's encounters";
         const reply = {
-            command: { action: 'findEncounters', practitionerName: 'House' },
-            confidence: 1,
+            commands: [
+                { action: 'openPatients', view: 'list' },
+                { action: 'findEncounters', practitionerName: 'House' },
+            ],
             llmStats: [
                 { durationSeconds: 0.2, modelId: 'decide', usage: { inputTokens: 698 } },
                 { durationSeconds: 0.9, modelId: 'parameters', usage: { inputTokens: 300 } },
